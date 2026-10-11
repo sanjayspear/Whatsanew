@@ -1,0 +1,6 @@
+openapi: 3.1.0
+info:
+  title: Pulse model-registry-service
+  version: 0.1.0
+  description: "Versioned, signed distilled-model distribution: manifests per channel, staged rollout, delta artifacts on CDN."
+paths: {}   # Contract-first: endpoints are defined here before implementation (see docs/services.md).

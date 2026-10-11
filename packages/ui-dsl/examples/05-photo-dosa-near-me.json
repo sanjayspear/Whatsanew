@@ -1,0 +1,17 @@
+{
+  "utterance": "Where can I get this near me, something cheap?",
+  "modalities": ["camera", "voice"],
+  "visionTags": ["food.south_indian", "dosa", "plate"],
+  "frame": {
+    "task": "DISCOVER",
+    "query": {
+      "categories": ["food.restaurant.south_indian"],
+      "text": "dosa",
+      "near": { "anchor": { "type": "here" }, "radiusMeters": 2000 },
+      "priceLevelMax": 1,
+      "openNow": true
+    },
+    "confidence": 0.84,
+    "source": "ON_DEVICE_LLM"
+  }
+}

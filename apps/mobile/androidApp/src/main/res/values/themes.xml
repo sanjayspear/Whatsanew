@@ -1,0 +1,10 @@
+<resources>
+    <!-- Dusk background from the first frame: no white flash before Compose draws. -->
+    <style name="Theme.Pulse" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/pulse_dusk</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <color name="pulse_dusk">#FF0D1330</color>
+</resources>

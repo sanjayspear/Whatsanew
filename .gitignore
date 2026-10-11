@@ -1,0 +1,53 @@
+# Gradle / Kotlin
+.gradle/
+build/
+!**/src/**/build/
+.kotlin/
+local.properties
+*.class
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.fleet/
+
+# Android
+captures/
+*.apk
+*.aab
+.cxx/
+
+# iOS / Xcode
+apps/mobile/iosApp/*.xcodeproj/
+xcuserdata/
+DerivedData/
+*.xcworkspace/
+Pods/
+
+# Python / AI server
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+ai-server/artifacts/
+*.gguf
+*.tflite
+*.task
+*.mlpackage/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# OS
+.DS_Store
+
+# Android signing (never commit)
+*.jks
+keystore.properties
+
+# Built artifacts
+dist/

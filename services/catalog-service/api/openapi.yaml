@@ -1,0 +1,127 @@
+openapi: 3.1.0
+info:
+  title: Pulse Catalog Service
+  version: 1.0.0
+  description: |
+    Listings (cafes, events, shopping, fitness, hidden gems). Internal service: reached only via
+    api-gateway (mTLS inside the mesh). Search is candidate generation ordered by distance;
+    personal ranking happens on-device.
+servers:
+  - url: http://catalog-service.pulse.svc.cluster.local
+paths:
+  /v1/listings:
+    get:
+      operationId: searchListings
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number, minimum: -90, maximum: 90 } }
+        - { name: lng, in: query, required: true, schema: { type: number, minimum: -180, maximum: 180 } }
+        - { name: radius, in: query, schema: { type: integer, minimum: 100, maximum: 50000, default: 5000 } }
+        - { name: category, in: query, description: "Taxonomy prefix; repeatable", schema: { type: array, items: { type: string } }, style: form, explode: true }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: freshness, in: query, schema: { type: string, enum: [NEW] } }
+        - { name: priceLevelMax, in: query, schema: { type: integer, minimum: 1, maximum: 4 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: Accept-Language, in: header, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SearchResponse" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createListing
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateListingRequest" } } }
+      responses:
+        "201":
+          description: Created
+          headers: { Location: { schema: { type: string } } }
+          content: { application/json: { schema: { $ref: "#/components/schemas/Listing" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+  /v1/listings/{id}:
+    get:
+      operationId: getListing
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Accept-Language, in: header, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Listing" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /v1/listings/{id}/archive:
+    post:
+      operationId: archiveListing
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Listing" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+components:
+  responses:
+    Problem:
+      description: RFC 9457 problem details
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+  schemas:
+    Problem:
+      type: object
+      properties: { type: { type: string }, title: { type: string }, status: { type: integer }, detail: { type: string } }
+    Location:
+      type: object
+      required: [lat, lng]
+      properties: { lat: { type: number }, lng: { type: number } }
+    Money:
+      type: object
+      required: [amountMinor, currency]
+      properties: { amountMinor: { type: integer, format: int64, minimum: 0 }, currency: { type: string, pattern: "^[A-Z]{3}$" } }
+    Event:
+      type: object
+      required: [startsAt, endsAt]
+      properties: { startsAt: { type: string, format: date-time }, endsAt: { type: string, format: date-time } }
+    CreateListingRequest:
+      type: object
+      required: [title, category, location, regionCode, timeZone]
+      properties:
+        title: { type: object, additionalProperties: { type: string }, example: { en: "Third Wave Coffee", kn: "ಥರ್ಡ್ ವೇವ್ ಕಾಫಿ" } }
+        summary: { type: object, additionalProperties: { type: string } }
+        category: { type: string, example: food.cafe }
+        location: { $ref: "#/components/schemas/Location" }
+        regionCode: { type: string, example: IN-KA-BLR }
+        timeZone: { type: string, example: Asia/Kolkata }
+        address: { type: string }
+        priceLevel: { type: integer, minimum: 1, maximum: 4 }
+        price: { $ref: "#/components/schemas/Money" }
+        event: { $ref: "#/components/schemas/Event" }
+        phone: { type: string, description: E.164 }
+        website: { type: string }
+        heroImageUrl: { type: string }
+        videoId: { type: string }
+    Listing:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        summary: { type: string }
+        titles: { type: object, additionalProperties: { type: string } }
+        category: { type: string }
+        location: { $ref: "#/components/schemas/Location" }
+        regionCode: { type: string }
+        timeZone: { type: string }
+        address: { type: string }
+        priceLevel: { type: integer }
+        price: { $ref: "#/components/schemas/Money" }
+        event: { $ref: "#/components/schemas/Event" }
+        phone: { type: string }
+        website: { type: string }
+        heroImageUrl: { type: string }
+        videoId: { type: string }
+        status: { type: string, enum: [PUBLISHED, ARCHIVED] }
+        firstListedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        distanceMeters: { type: number }
+    SearchResponse:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Listing" } }
+        nextCursor: { type: string }

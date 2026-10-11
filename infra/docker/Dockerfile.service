@@ -1,0 +1,14 @@
+# Generic image for any Pulse Spring Boot service:
+#   docker build -f infra/docker/Dockerfile.service --build-arg SERVICE=catalog-service -t pulse/catalog-service .
+FROM eclipse-temurin:21-jdk AS build
+ARG SERVICE
+WORKDIR /src
+COPY . .
+RUN ./gradlew -p services :${SERVICE}:bootJar --no-daemon -x test
+
+FROM eclipse-temurin:21-jre
+ARG SERVICE
+RUN useradd --uid 10001 --create-home app
+USER 10001
+COPY --from=build /src/services/${SERVICE}/build/libs/*.jar /app/app.jar
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]

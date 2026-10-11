@@ -1,0 +1,10 @@
+{
+  "utterance": "Change my app theme to something warm and quieter.",
+  "modalities": ["voice"],
+  "frame": {
+    "task": "CUSTOMIZE_THEME",
+    "theme": { "mood": "WARM", "motionScale": 0.5, "saturation": 0.75, "blurScale": 1.2 },
+    "confidence": 0.9,
+    "source": "ON_DEVICE_LLM"
+  }
+}

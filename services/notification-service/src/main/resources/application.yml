@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: notification-service
+  threads:
+    virtual:
+      enabled: true
+server:
+  port: ${PORT:8086}
+  shutdown: graceful
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

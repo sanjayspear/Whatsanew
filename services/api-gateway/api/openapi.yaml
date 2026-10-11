@@ -1,0 +1,6 @@
+openapi: 3.1.0
+info:
+  title: Pulse api-gateway
+  version: 0.1.0
+  description: "Edge: auth (DPoP-bound JWT), device attestation, rate limiting, REST BFF for mobile."
+paths: {}   # Contract-first: endpoints are defined here before implementation (see docs/services.md).

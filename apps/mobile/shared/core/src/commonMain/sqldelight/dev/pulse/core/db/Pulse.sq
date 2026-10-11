@@ -1,0 +1,59 @@
+-- Offline-first local store. Listings are cached as JSON documents (schema evolves with the
+-- API without migrations); signals and prefs are relational.
+
+CREATE TABLE listing_cache (
+    id TEXT NOT NULL PRIMARY KEY,
+    region_code TEXT NOT NULL,
+    category TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    json TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL
+);
+
+CREATE INDEX listing_cache_region ON listing_cache(region_code, category);
+
+CREATE TABLE signal (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    json TEXT NOT NULL,
+    at_epoch_ms INTEGER NOT NULL,
+    uploaded INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX signal_time ON signal(at_epoch_ms);
+
+CREATE TABLE kv (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+upsertListing:
+INSERT OR REPLACE INTO listing_cache(id, region_code, category, lat, lng, json, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+listingsInRegion:
+SELECT json FROM listing_cache WHERE region_code = ?;
+
+evictListingsOlderThan:
+DELETE FROM listing_cache WHERE fetched_at < ?;
+
+insertSignal:
+INSERT INTO signal(json, at_epoch_ms) VALUES (?, ?);
+
+signalsSince:
+SELECT json FROM signal WHERE at_epoch_ms >= ? ORDER BY at_epoch_ms;
+
+pendingSignals:
+SELECT id, json FROM signal WHERE uploaded = 0 ORDER BY id LIMIT ?;
+
+markUploaded:
+UPDATE signal SET uploaded = 1 WHERE id IN ?;
+
+pruneUploaded:
+DELETE FROM signal WHERE uploaded = 1 AND at_epoch_ms < ?;
+
+getValue:
+SELECT value FROM kv WHERE key = ?;
+
+putValue:
+INSERT OR REPLACE INTO kv(key, value) VALUES (?, ?);

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pulse.dev/catalog/listing-published.v1.json",
+  "title": "dev.pulse.catalog.listing.published.v1",
+  "description": "CloudEvents 1.0 structured envelope. Topic catalog.listing.v1, key = listingId. Consumers dedupe on id.",
+  "type": "object",
+  "required": ["specversion", "id", "source", "type", "subject", "time", "data"],
+  "properties": {
+    "specversion": { "const": "1.0" },
+    "id": { "type": "string", "format": "uuid" },
+    "source": { "const": "/services/catalog-service" },
+    "type": { "const": "dev.pulse.catalog.listing.published.v1" },
+    "subject": { "type": "string", "format": "uuid" },
+    "time": { "type": "string", "format": "date-time" },
+    "datacontenttype": { "const": "application/json" },
+    "data": {
+      "type": "object",
+      "required": ["listingId", "title", "category", "location", "regionCode", "timeZone"],
+      "properties": {
+        "listingId": { "type": "string" },
+        "title": { "type": "object", "additionalProperties": { "type": "string" } },
+        "category": { "type": "string", "pattern": "^[a-z]+(\\.[a-z_]+)*$" },
+        "location": { "type": "object", "required": ["lat", "lng"], "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } },
+        "regionCode": { "type": "string" },
+        "timeZone": { "type": "string" },
+        "priceLevel": { "type": ["integer", "null"] },
+        "startsAt": { "type": ["string", "null"], "format": "date-time" },
+        "endsAt": { "type": ["string", "null"], "format": "date-time" },
+        "hasVideo": { "type": "boolean" }
+      }
+    }
+  }
+}

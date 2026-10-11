@@ -1,0 +1,14 @@
+{
+  "utterance": "Show me new cafes in Koramangala within 3 km",
+  "modalities": ["text"],
+  "frame": {
+    "task": "DISCOVER",
+    "query": {
+      "categories": ["food.cafe"],
+      "near": { "anchor": { "type": "place", "name": "Koramangala" }, "radiusMeters": 3000 },
+      "freshness": "NEW"
+    },
+    "confidence": 0.97,
+    "source": "RULES"
+  }
+}

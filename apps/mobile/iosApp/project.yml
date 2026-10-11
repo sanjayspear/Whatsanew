@@ -1,0 +1,27 @@
+# XcodeGen spec: `brew install xcodegen && cd apps/mobile/iosApp && xcodegen` generates
+# iosApp.xcodeproj (gitignored, so there are no pbxproj merge conflicts).
+name: iosApp
+options:
+  bundleIdPrefix: dev.pulse
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  iosApp:
+    type: application
+    platform: iOS
+    sources: [iosApp]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.pulse.app
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Speak what you're looking for."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Understands your voice on-device."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Point at something to find it nearby."
+        GENERATE_INFOPLIST_FILE: YES
+        FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../shared/ui/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS: ["-framework", "PulseKit", "-lsqlite3"]
+    preBuildScripts:
+      - name: Build PulseKit (Kotlin)
+        script: |
+          cd "$SRCROOT/../../.."
+          ./gradlew -p apps/mobile :shared:ui:embedAndSignAppleFrameworkForXcode
+        basedOnDependencyAnalysis: false

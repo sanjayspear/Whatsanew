@@ -1,0 +1,14 @@
+{
+  "utterance": "Any drama or theatre near Ravindra Kalakshetra this weekend?",
+  "modalities": ["voice"],
+  "frame": {
+    "task": "DISCOVER",
+    "query": {
+      "categories": ["arts.theatre"],
+      "near": { "anchor": { "type": "place", "name": "Ravindra Kalakshetra" }, "radiusMeters": 5000 },
+      "time": { "preset": "THIS_WEEKEND" }
+    },
+    "confidence": 0.93,
+    "source": "RULES"
+  }
+}

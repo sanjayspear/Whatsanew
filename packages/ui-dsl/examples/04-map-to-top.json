@@ -1,0 +1,10 @@
+{
+  "utterance": "Move the map to the top of the screen.",
+  "modalities": ["text"],
+  "frame": {
+    "task": "CUSTOMIZE_LAYOUT",
+    "layout": [{ "type": "move", "role": "map", "position": 0 }],
+    "confidence": 0.98,
+    "source": "RULES"
+  }
+}

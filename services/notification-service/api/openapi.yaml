@@ -1,0 +1,6 @@
+openapi: 3.1.0
+info:
+  title: Pulse notification-service
+  version: 0.1.0
+  description: "Push (FCM/APNs), email and in-app notifications: "a play you would like opens tonight". Quiet hours and frequency caps."
+paths: {}   # Contract-first: endpoints are defined here before implementation (see docs/services.md).

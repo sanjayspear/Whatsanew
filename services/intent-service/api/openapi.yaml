@@ -1,0 +1,6 @@
+openapi: 3.1.0
+info:
+  title: Pulse intent-service
+  version: 0.1.0
+  description: "Server-side intent resolution for devices without an on-device LLM, and parity/eval of on-device output. Reuses the exact same SurfaceComposer as mobile (packages/ui-dsl)."
+paths: {}   # Contract-first: endpoints are defined here before implementation (see docs/services.md).

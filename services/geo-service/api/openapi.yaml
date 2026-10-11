@@ -1,0 +1,6 @@
+openapi: 3.1.0
+info:
+  title: Pulse geo-service
+  version: 0.1.0
+  description: "Radius and polygon queries, metro-aware search (walk/metro isochrones), place gazetteer per region. PostGIS."
+paths: {}   # Contract-first: endpoints are defined here before implementation (see docs/services.md).

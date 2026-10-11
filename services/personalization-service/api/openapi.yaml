@@ -1,0 +1,6 @@
+openapi: 3.1.0
+info:
+  title: Pulse personalization-service
+  version: 0.1.0
+  description: "Cohort profiles from DP-noised histograms, item embeddings (pgvector), optional server re-rank of candidates."
+paths: {}   # Contract-first: endpoints are defined here before implementation (see docs/services.md).

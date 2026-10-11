@@ -1,0 +1,5 @@
+apiVersion: v2
+name: pulse-service
+description: One chart for every Pulse Spring Boot service. A new service is a values file, not a new chart.
+type: application
+version: 0.1.0

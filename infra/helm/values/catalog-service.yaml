@@ -1,0 +1,9 @@
+name: catalog-service
+image:
+  repository: ghcr.io/pulse/catalog-service
+port: 8080
+env:
+  OUTBOX_RELAY_ENABLED: "true"
+  TRACING_SAMPLING: "0.1"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability:4318/v1/traces
+secretEnvFrom: catalog-service-db   # CATALOG_DB_URL / USER / PASSWORD, KAFKA_BOOTSTRAP

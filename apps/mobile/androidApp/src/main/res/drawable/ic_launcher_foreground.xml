@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Faceted spark: a cuboctahedron-inspired mark inside the 72dp adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- square facet -->
+    <path android:fillColor="#668FA8FF" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:pathData="M54,30 L78,54 L54,78 L30,54 Z" />
+    <!-- triangle facets -->
+    <path android:fillColor="#99D09BFF" android:pathData="M54,30 L66,42 L54,54 Z" />
+    <path android:fillColor="#558FA8FF" android:pathData="M78,54 L66,66 L54,54 Z" />
+    <path android:fillColor="#77D09BFF" android:pathData="M54,78 L42,66 L54,54 Z" />
+    <path android:fillColor="#448FA8FF" android:pathData="M30,54 L42,42 L54,54 Z" />
+    <path android:strokeColor="#CCFFFFFF" android:strokeWidth="1.2"
+        android:pathData="M42,42 L66,42 L66,66 L42,66 Z M54,30 L54,78 M30,54 L78,54" />
+    <!-- highlight -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54,38 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>
