@@ -4,7 +4,7 @@
 records what changed in the code, why, how the pieces connect, and what's fragile. Newest first.
 
 Baseline: commit `b672faf` on `main` (session 1, 2026-10-11: the original scaffold). Everything
-below is session 2 (2026-10-12) and is **not yet committed or pushed**: 74 paths changed locally.
+below is session 2 (2026-10-12), committed and pushed as `27a4319`.
 
 ---
 

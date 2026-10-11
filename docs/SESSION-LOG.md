@@ -23,10 +23,11 @@ Tests: DSL 34, mobile core 48, Compose UI 4, services 53, all passing. New APK: 
 | 19 | "Document what you changed so you know before resuming" | Wrote **`docs/CHANGES.md`**: the technical record (files, reasons, data flow, invariants, known issues, how to verify, device notes). Saved the neighbourhood-pack generator as `tools/osm-pack/build_place_pack.py` (verified it reproduces the pack exactly). |
 | 20 | "On the location card only Go works; the other two aren't clickable" | Root cause: Save/Share went to `pulse://` links nobody handled. Built a **saved shelf** (bookmark toggles, "Saved to your shelf", listed in Settings, works offline) and **Share** (system share sheet with name, address, map link). **Testing on the Pixel also caught a launch crash when updating over the old version** (missing DB migration); fixed with a migration + test. Verified on the Pixel: Save, Share sheet (WhatsApp/Gmail…), shelf shows Lalitha Medicals. APK: `dist/pulse-0.3.1.apk`. |
 
+| 21 | "yes please" (commit + push) | Committed and pushed as **`27a4319`** (91 files), co-authored by Ashok Kumar S and Claude. No secrets, APKs or models in git. |
+
 Tests at end of session 2: DSL 34, mobile core 60, Compose UI 7, services 53, all passing.
 
 ### Still open after session 2
-- Commit + push everything since `b672faf` (not pushed yet).
 - **Places: solved for Bengaluru with OpenStreetMap.** Next: catalog-service OSM import + tile API so any city works without packs (needs a server to host it).
 - **Events with dates** (tonight's shows): OSM has venues, not schedules. Needs merchant-posted events (Merchant role) or partner feeds.
 - Header chip still shows the requested radius (≤ 2 km) when results widened to 5 km; the note below explains it.
