@@ -17,6 +17,9 @@ import kotlinx.datetime.toLocalDateTime
 /** Anything that can enumerate locally available listings (seed, SQLDelight cache). */
 fun interface ListingSource {
     fun all(): List<ListingItem>
+
+    /** Listings around a point. Large stores override this with an indexed spatial query. */
+    fun near(center: GeoCoordinate, radiusMeters: Int): List<ListingItem> = all()
 }
 
 /**
@@ -31,7 +34,26 @@ class ListingResolver(
     private val location: LocationProvider,
     private val ranker: LocalRanker,
     private val nowMs: () -> Long,
+    /** Coordinates for area names outside the offline pack, learned online (cached). */
+    private val geocoded: (String) -> GeoCoordinate? = { null },
 ) {
+    /**
+     * Like [resolve], but never a dead end: if fewer than [minResults] places are within the radius,
+     * widen it (x2.5, up to [maxRadiusMeters]) and say so. Sparse areas still get the nearest options.
+     */
+    fun resolveWidening(binding: Binding, minResults: Int = 3, maxRadiusMeters: Int = 10_000): Resolution {
+        val requested = binding.query.near?.radiusMeters ?: GeoFilter.DEFAULT_RADIUS_METERS
+        var radius = requested
+        var items = resolve(binding)
+        val withinRequested = items.size
+        while (items.size < minResults && radius < maxRadiusMeters && binding.query.near != null) {
+            radius = (radius * 5 / 2).coerceAtMost(maxRadiusMeters)
+            val wider = binding.copy(query = binding.query.copy(near = binding.query.near!!.copy(radiusMeters = radius)))
+            items = resolve(wider)
+        }
+        return Resolution(items, requestedRadiusMeters = requested, radiusMeters = radius, withinRequested = withinRequested)
+    }
+
     fun resolve(binding: Binding): List<ResolvedItem> {
         val q = binding.query
         val anchor = anchorOf(q.near?.anchor)
@@ -39,7 +61,7 @@ class ListingResolver(
         val now = nowMs()
         val text = q.text?.lowercase()
 
-        val candidates = source.all().asSequence()
+        val candidates = source.near(anchor, radius).asSequence()
             .map { ResolvedItem(it, haversineMeters(anchor.lat, anchor.lng, it.lat, it.lng)) }
             .filter { it.distanceMeters <= radius }
             .filter { r -> q.categories.isEmpty() || q.categories.any { c -> r.item.category == c || r.item.category.startsWith("$c.") } }
@@ -72,7 +94,9 @@ class ListingResolver(
 
     fun anchorOf(anchor: GeoAnchor?): GeoCoordinate = when (anchor) {
         is GeoAnchor.Point -> GeoCoordinate(anchor.lat, anchor.lng)
-        is GeoAnchor.Place -> gazetteer.lookup(anchor.name)?.let { GeoCoordinate(it.lat, it.lng) } ?: location.lastKnown()
+        is GeoAnchor.Place -> gazetteer.lookup(anchor.name)?.let { GeoCoordinate(it.lat, it.lng) }
+            ?: geocoded(anchor.name)
+            ?: location.lastKnown()
         GeoAnchor.Here, null -> location.lastKnown()
     }
 
@@ -99,6 +123,17 @@ class ListingResolver(
     private companion object {
         const val NEWNESS_WINDOW_MS = 90L * 24 * 60 * 60_000
     }
+}
+
+/** Results plus the radius that produced them (may be wider than requested in sparse areas). */
+data class Resolution(
+    val items: List<ResolvedItem>,
+    val requestedRadiusMeters: Int,
+    val radiusMeters: Int,
+    /** How many results were inside the radius the user asked for. */
+    val withinRequested: Int = items.size,
+) {
+    val widened: Boolean get() = radiusMeters > requestedRadiusMeters
 }
 
 fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {

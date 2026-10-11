@@ -25,6 +25,20 @@ class MainActivity : ComponentActivity() {
         micResult?.complete(granted)
     }
 
+    private var locationResult: CompletableDeferred<Boolean>? = null
+    private val locationPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        locationResult?.complete(grants.values.any { it })
+    }
+
+    /** Fine or approximate both work; "approximate" still re-queries as the user moves. */
+    private suspend fun ensureLocationPermission(): Boolean {
+        val perms = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (perms.any { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) return true
+        val pending = CompletableDeferred<Boolean>().also { locationResult = it }
+        locationPermission.launch(perms)
+        return pending.await()
+    }
+
     /** Asks only when needed; the system remembers "allow" and "don't allow" afterwards. */
     private suspend fun ensureMicPermission(): Boolean {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) return true
@@ -37,6 +51,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val graph = (application as PulseApplication).graph
-        setContent { PulseApp(graph, requestMicPermission = ::ensureMicPermission) }
+        setContent {
+            PulseApp(graph, requestMicPermission = ::ensureMicPermission, requestLocationPermission = ::ensureLocationPermission)
+        }
     }
 }

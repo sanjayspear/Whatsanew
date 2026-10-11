@@ -165,7 +165,12 @@ class SurfaceComposer(private val newSurfaceId: () -> String) {
         val ordered = (prefs.order + sections.keys.filterNot { it in prefs.order })
             .filterNot { it in prefs.hidden }
             .mapNotNull { sections[it] }
-        return Node(ROOT_ID, "layout.stack", role = Roles.ROOT, children = ordered)
+        // Vague request ("show me something nearby"): lead with a category picker. It always sits
+        // on top, independent of layout prefs, because it is a question for the user rather than content.
+        val picker = if (query.isAmbiguous()) {
+            listOf(Node(PICKER_ID, "intent.category_picker", role = Roles.PICKER, props = queryProps(query)))
+        } else emptyList()
+        return Node(ROOT_ID, "layout.stack", role = Roles.ROOT, children = picker + ordered)
     }
 
     private fun cardTemplate(eventLike: Boolean) = Node(
@@ -198,6 +203,7 @@ class SurfaceComposer(private val newSurfaceId: () -> String) {
         const val SUGGESTIONS_ID = "suggestions"
         const val TEMPLATE_CARD = "card"
         const val TEMPLATE_VIDEO = "video"
+        const val PICKER_ID = "picker"
     }
 }
 
@@ -206,6 +212,10 @@ internal fun ListingQuery.withDefaultAnchor(): ListingQuery =
     if (near != null) this else copy(near = GeoFilter(GeoAnchor.Here))
 
 private val EVENT_ROOTS = listOf("arts.", "events.", "music.", "sports.", "comedy.")
+
+/** Nothing narrows *what* the user wants, so a category question is more useful than a guess. */
+fun ListingQuery.isAmbiguous(): Boolean =
+    categories.isEmpty() && text == null && freshness == null && time == null && priceLevelMax == null
 
 /** Time-bound content gets showtimes, booking, and trailers. */
 internal fun ListingQuery.isEventLike(): Boolean =

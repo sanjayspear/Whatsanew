@@ -50,7 +50,7 @@ object GlassCardComponent : PulseComponent {
             languageTag = scope.languageTag,
             nowMs = scope.nowMs(),
             onOpen = { scope.signal(Signal(Signal.Kind.TAP, r.item.category, r.item.id, scope.nowMs())) },
-            actions = { ActionSheet(node.actions, r, { scope.dispatch(it, r) }) },
+            actions = { ActionSheet(node.actions, r, { scope.dispatch(it, r) }, isActive = { scope.isActive(it) }) },
             modifier = modifier,
         )
     }

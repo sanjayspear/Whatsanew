@@ -24,6 +24,12 @@ import dev.pulse.dsl.TimeWindow
  */
 class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
 
+    /** True if [placeName] (or one of its aliases) appears in what the user actually said. */
+    fun mentionsPlace(input: IntentInput, placeName: String): Boolean {
+        val said = gazetteer.findIn(normalize(listOf(input.text, *input.visionTags.toTypedArray()).joinToString(" ")))
+        return said != null && said.name.equals(gazetteer.lookup(placeName)?.name ?: placeName, ignoreCase = true)
+    }
+
     fun parse(input: IntentInput, context: IntentContext): IntentFrame {
         val t = normalize(listOf(input.text, *input.visionTags.toTypedArray()).joinToString(" "))
         if (t.isBlank()) return IntentFrame(Task.UNKNOWN, confidence = 0f)
@@ -97,17 +103,25 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
     }
 
     private fun extractQuery(t: String): Pair<ListingQuery, Float> {
-        val hits = Lexicon.categories.filter { t.hasPhrase(it.first) }
-        val categories = hits.map { it.second.category }.distinct()
+        // Strip the place name first, so "Cubbon Park" doesn't also read as the "park" category.
+        val placeMatch = gazetteer.matchIn(t)
+        val forCategories = placeMatch?.let { (alias, _) -> " $t ".replace(" $alias ", " ").trim() } ?: t
+        val hits = Lexicon.categories.filter { forCategories.hasPhrase(it.first) }
+        val categories = hits.flatMap { it.second.categories }.distinct()
             // Drop a parent when a child is present ("food.restaurant" + "food.restaurant.south_indian").
             .let { cats -> cats.filterNot { c -> cats.any { it != c && it.startsWith("$c.") } } }
         val dishText = hits.firstNotNullOfOrNull { it.second.text }
 
-        val place = gazetteer.findIn(t)
+        val place = placeMatch?.second
+        // Area the offline pack doesn't know ("near Mysuru Palace"): keep the name; the app geocodes it.
+        val unknownPlace = if (place == null) UNKNOWN_PLACE.find(forCategories)?.groupValues?.get(1)
+            ?.trim()?.takeIf { it.split(' ').none { w -> w in NOT_A_PLACE } && it.length >= 3 }
+            ?.split(' ')?.joinToString(" ") { w -> w.replaceFirstChar(Char::uppercase) } else null
         val here = Lexicon.hereWords.any(t::hasPhrase)
         val radius = RADIUS.find(t)?.let { m -> toMeters(m.groupValues[1].toDouble(), m.groupValues[2]) }
         val near = when {
             place != null -> GeoFilter(GeoAnchor.Place(place.name), radius ?: GeoFilter.DEFAULT_RADIUS_METERS)
+            unknownPlace != null -> GeoFilter(GeoAnchor.Place(unknownPlace), radius ?: GeoFilter.DEFAULT_RADIUS_METERS)
             here -> GeoFilter(GeoAnchor.Here, radius ?: 2_000)
             radius != null -> GeoFilter(GeoAnchor.Here, radius)
             else -> null
@@ -125,7 +139,7 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
             }
         }
         val openNow = if (Lexicon.openNow.any(t::hasPhrase)) true else null
-        val residue = if (categories.isEmpty()) residueText(t, place?.name) else null
+        val residue = if (categories.isEmpty()) residueText(t, place?.name ?: unknownPlace) else null
         val text = dishText ?: residue
 
         var confidence = when {
@@ -137,6 +151,8 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
         if (near != null) confidence += 0.15f
         if (time != null || freshness != null) confidence += 0.1f
         if (radius != null) confidence += 0.1f
+        // Every content word is explained by structure: nothing left for an LLM to interpret.
+        if (residueText(forCategories, place?.name ?: unknownPlace) == null) confidence = maxOf(confidence, 0.9f)
         return ListingQuery(
             categories = categories,
             text = text,
@@ -148,10 +164,12 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
         ) to confidence.coerceAtMost(0.97f)
     }
 
+    /** Content words not already turned into structure ("nearby" is a location, not a search term). */
     private fun residueText(t: String, placeName: String?): String? {
         val placeWords = placeName?.lowercase()?.split(' ')?.toSet().orEmpty()
+        val known: Set<String> = KNOWN_TERMS
         val words = t.split(' ').filter { w ->
-            w.length > 2 && w !in STOP_WORDS && w !in placeWords && !w.any(Char::isDigit) &&
+            w.length > 2 && w !in STOP_WORDS && w !in placeWords && !w.any(Char::isDigit) && w !in known &&
                 Lexicon.timePresets.none { it.first == w } && w !in Lexicon.freshNew
         }
         return words.takeIf { it.isNotEmpty() && it.size <= 4 }?.joinToString(" ")
@@ -167,6 +185,16 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
     }
 
     private companion object {
+        val UNKNOWN_PLACE = Regex("""\b(?:in|near|around|at)\s+([a-z][a-z0-9 .'-]{2,40}?)(?=\s+(?:within|this|today|tonight|tomorrow|under|for|with|open|that|which)\b|${'$'})""")
+        val NOT_A_PLACE = setOf("me", "here", "my", "us", "the", "area", "town", "city", "night", "evening", "morning", "home", "all", "this")
+
+        /** Single words that the lexicons already turn into structure. */
+        val KNOWN_TERMS: Set<String> = buildSet {
+            (Lexicon.categories.map { it.first } + Lexicon.freshNew + Lexicon.freshTrending + Lexicon.cheap +
+                Lexicon.openNow + Lexicon.hereWords + Lexicon.timePresets.map { it.first })
+                .forEach { phrase -> addAll(phrase.split(' ')) }
+            addAll(listOf("nearby", "near", "within", "around", "under", "below", "metres", "meters", "kms", "km"))
+        }
         val RADIUS = Regex("""(\d+(?:\.\d+)?)\s*(km|kms|kilometers|kilometres|kilometer|kilometre|m|meters|metres|meter|metre|mi|miles|mile)\b""")
         val UNDER_PRICE = Regex("""(?:under|below|less than)\s*(?:₹|rs\.?|inr)?\s*(\d+)""")
         val STOP_WORDS = setOf(

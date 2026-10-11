@@ -12,6 +12,7 @@ CREATE TABLE listing_cache (
 );
 
 CREATE INDEX listing_cache_region ON listing_cache(region_code, category);
+CREATE INDEX listing_cache_lat_lng ON listing_cache(lat, lng);
 
 CREATE TABLE signal (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,6 +22,13 @@ CREATE TABLE signal (
 );
 
 CREATE INDEX signal_time ON signal(at_epoch_ms);
+
+-- The personal shelf: places the user saved. Full JSON so it works offline and survives cache eviction.
+CREATE TABLE saved_listing (
+    listing_id TEXT NOT NULL PRIMARY KEY,
+    json TEXT NOT NULL,
+    saved_at INTEGER NOT NULL
+);
 
 CREATE TABLE kv (
     key TEXT NOT NULL PRIMARY KEY,
@@ -33,6 +41,15 @@ VALUES (?, ?, ?, ?, ?, ?, ?);
 
 listingsInRegion:
 SELECT json FROM listing_cache WHERE region_code = ?;
+
+recentListings:
+SELECT json FROM listing_cache ORDER BY fetched_at DESC LIMIT ?;
+
+listingsInBox:
+SELECT json FROM listing_cache WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ? LIMIT ?;
+
+countInRegion:
+SELECT COUNT(*) FROM listing_cache WHERE region_code = ?;
 
 evictListingsOlderThan:
 DELETE FROM listing_cache WHERE fetched_at < ?;
@@ -57,3 +74,15 @@ SELECT value FROM kv WHERE key = ?;
 
 putValue:
 INSERT OR REPLACE INTO kv(key, value) VALUES (?, ?);
+
+saveListing:
+INSERT OR REPLACE INTO saved_listing(listing_id, json, saved_at) VALUES (?, ?, ?);
+
+unsaveListing:
+DELETE FROM saved_listing WHERE listing_id = ?;
+
+savedListings:
+SELECT json FROM saved_listing ORDER BY saved_at DESC;
+
+savedIds:
+SELECT listing_id FROM saved_listing;

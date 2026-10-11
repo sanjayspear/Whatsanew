@@ -69,4 +69,5 @@ object Roles {
     const val RESULTS = "results"
     const val VIDEOS = "videos"
     const val SUGGESTIONS = "suggestions"
+    const val PICKER = "picker"
 }

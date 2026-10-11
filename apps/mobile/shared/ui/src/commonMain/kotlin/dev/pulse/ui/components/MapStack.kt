@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import dev.pulse.core.data.GeoCoordinate
 import dev.pulse.core.data.ResolvedItem
 import dev.pulse.dsl.GeoAnchor
-import dev.pulse.dsl.GeoFilter
 import dev.pulse.dsl.Node
 import dev.pulse.ui.design.Pulse
 import dev.pulse.ui.design.PulseType
@@ -58,13 +57,13 @@ object MapStackComponent : PulseComponent {
     @Composable
     override fun Render(node: Node, scope: RenderScope, modifier: Modifier) {
         val bind = node.bind ?: return
-        val items = remember(bind) { scope.resolve(bind) }
+        val resolution = remember(bind, scope.dataVersion) { scope.resolve(bind) }
         val near = bind.query.near
         MapStack(
             anchor = scope.anchorOf(near?.anchor),
             anchorLabel = (near?.anchor as? GeoAnchor.Place)?.name ?: "You",
-            radiusMeters = near?.radiusMeters ?: GeoFilter.DEFAULT_RADIUS_METERS,
-            items = items,
+            radiusMeters = resolution.radiusMeters,
+            items = resolution.items,
             modifier = modifier,
         )
     }

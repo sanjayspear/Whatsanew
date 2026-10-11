@@ -1,0 +1,9 @@
+# MediaPipe's iOS GenAI SDK ships via CocoaPods. After `xcodegen`, run `pod install`
+# and open iosApp.xcworkspace.
+platform :ios, '17.0'
+
+target 'iosApp' do
+  use_frameworks! :linkage => :static
+  pod 'MediaPipeTasksGenAI'
+  pod 'MediaPipeTasksGenAIC'
+end

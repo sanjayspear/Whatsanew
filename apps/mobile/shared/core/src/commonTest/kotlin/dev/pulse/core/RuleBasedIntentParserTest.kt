@@ -12,6 +12,7 @@ import dev.pulse.dsl.LayoutEdit
 import dev.pulse.dsl.Mood
 import dev.pulse.dsl.Task
 import dev.pulse.dsl.TimePreset
+import dev.pulse.dsl.isAmbiguous
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -119,5 +120,13 @@ class RuleBasedIntentParserTest {
     fun fillerWordsAreUnknownNotTextSearches() {
         assertEquals(Task.UNKNOWN, parse("hmm").task)
         assertEquals(Task.UNKNOWN, parse("okay thanks").task)
+    }
+
+    @Test
+    fun vagueNearbyRequestIsAmbiguousSoThePickerShows() {
+        val f = parse("show me something nearby")
+        assertEquals(Task.DISCOVER, f.task)
+        assertEquals(null, f.query!!.text, "'nearby' is a location word, not a search term")
+        assertTrue(f.query!!.isAmbiguous())
     }
 }

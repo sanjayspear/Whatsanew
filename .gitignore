@@ -51,3 +51,6 @@ keystore.properties
 
 # Built artifacts
 dist/
+
+# IDE build output (VS Code / Eclipse Java extensions)
+bin/

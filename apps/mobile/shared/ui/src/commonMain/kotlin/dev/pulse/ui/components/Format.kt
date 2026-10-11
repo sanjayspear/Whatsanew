@@ -24,6 +24,13 @@ internal object Format {
         "arts.cinema" to "Cinema", "arts.gallery" to "Galleries", "music.live" to "Live music", "comedy.standup" to "Stand-up",
         "fitness" to "Fitness", "fitness.yoga" to "Yoga", "fitness.gym" to "Gyms", "shopping" to "Shopping",
         "shopping.books" to "Bookstores", "shopping.market" to "Markets", "gems" to "Hidden gems",
+        "food" to "Food", "fashion" to "Fashion", "fashion.ethnic" to "Ethnic wear", "fashion.footwear" to "Footwear",
+        "fashion.streetwear" to "Streetwear", "fashion.thrift" to "Thrift", "fashion.boutique" to "Boutiques",
+        "stay" to "Stays", "stay.hotel" to "Hotels & stays", "events" to "Events", "events.workshop" to "Workshops",
+        "arts" to "Arts & culture", "arts.museum" to "Museums", "music" to "Live music", "comedy" to "Comedy",
+        "gems.park" to "Parks", "gems.lake" to "Lakes", "shopping.mall" to "Malls", "shopping.electronics" to "Electronics",
+        "health.pharmacy" to "Pharmacies", "health.hospital" to "Hospitals & clinics", "services.atm" to "ATMs & banks",
+        "services.fuel" to "Fuel & charging", "food.bakery" to "Bakeries", "fitness.gym" to "Gyms",
     )
     private val kannada = mapOf("food.cafe" to "ಕೆಫೆಗಳು", "arts.theatre" to "ರಂಗಭೂಮಿ")
 
@@ -35,7 +42,9 @@ internal object Format {
 
     fun headline(q: ListingQuery, lang: String): String {
         val what = when {
-            q.categories.isNotEmpty() -> q.categories.joinToString(" & ") { category(it, lang) }
+            q.categories.toSet() == dev.pulse.core.ai.Lexicon.EVENTS.toSet() -> "Events"
+            q.categories.isNotEmpty() -> q.categories.take(2).joinToString(" & ") { category(it, lang) } +
+                if (q.categories.size > 2) " & more" else ""
             q.text != null -> "“${q.text}”"
             else -> "Around you"
         }

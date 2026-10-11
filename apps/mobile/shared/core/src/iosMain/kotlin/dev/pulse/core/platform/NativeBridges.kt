@@ -21,3 +21,17 @@ interface NativeSpeechBridge {
 interface NativeCryptoBridge {
     fun verifyEd25519(payloadBase64: String, signatureBase64: String, publicKeyBase64: String): Boolean
 }
+
+/** MediaPipe LLM Inference (MediaPipeTasksGenAI pod) running the universal model. Implemented in Swift. */
+interface NativeMediaPipeBridge {
+    fun load(modelPath: String): Boolean
+    fun generate(prompt: String, onResult: (String?, String?) -> Unit)
+    fun close()
+}
+
+/** URLSession download + CryptoKit SHA-256 verification into Application Support. Implemented in Swift. */
+interface NativeModelBridge {
+    fun installedPath(modelId: String): String?
+    fun download(modelId: String, url: String, sha256: String, onProgress: (Double) -> Unit, onDone: (String?, String?) -> Unit)
+    fun delete(modelId: String)
+}

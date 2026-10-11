@@ -10,12 +10,13 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import dev.pulse.core.ai.BackendAvailability
 import dev.pulse.core.ai.GenerationRequest
 import dev.pulse.core.ai.LanguageModelBackend
 import dev.pulse.core.ai.SpeechEngine
 import dev.pulse.core.ai.Transcript
-import java.io.File
+import dev.pulse.core.model.ModelManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -39,38 +40,90 @@ class GeminiNanoBackend(@Suppress("unused") private val context: Context) : Lang
     override fun generate(request: GenerationRequest): Flow<String> = emptyFlow()
 }
 
-/** Gemma INT4 `.task` bundle via MediaPipe LLM Inference (GPU delegate where supported). */
+/** The universal open-source model (`.task` bundle) via MediaPipe LLM Inference. */
 class MediaPipeLlmBackend(
     private val context: Context,
-    private val modelFile: () -> File,
+    private val models: ModelManager,
 ) : LanguageModelBackend {
-    override val id = "mediapipe-gemma-int4"
+    override val id = "mediapipe-" + models.model.id
     private var engine: LlmInference? = null
 
     override suspend fun availability(): BackendAvailability {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val mem = ActivityManager.MemoryInfo().also(am::getMemoryInfo)
-        val enoughRam = mem.totalMem >= 5_500_000_000L && !am.isLowRamDevice // 6 GB perf floor
+        // A 0.5B model peaks around 1 GB; leave the rest of a 4 GB phone to the OS and the app.
+        val enoughRam = mem.totalMem >= 3_500_000_000L && !am.isLowRamDevice
         return when {
             !enoughRam -> BackendAvailability.UNAVAILABLE
-            modelFile().exists() -> BackendAvailability.AVAILABLE
+            models.installedPath() != null -> BackendAvailability.AVAILABLE
             else -> BackendAvailability.DOWNLOADABLE
         }
     }
 
+    /** Which accelerator actually loaded, for diagnostics ("gpu" or "cpu"). */
+    var accelerator: String = "none"
+        private set
+
     override suspend fun prepare() = withContext(Dispatchers.Default) {
-        if (engine == null) {
-            val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(modelFile().absolutePath)
-                .setMaxTokens(512)
-                .build()
-            engine = LlmInference.createFromOptions(context, options)
+        if (engine != null) return@withContext
+        val path = checkNotNull(models.installedPath()) { "model not installed" }
+        fun build(backend: LlmInference.Backend) = LlmInference.createFromOptions(
+            context,
+            LlmInference.LlmInferenceOptions.builder()
+                .setModelPath(path)
+                .setMaxTokens(1024)
+                .setPreferredBackend(backend)
+                .build(),
+        )
+        // A backend only counts once it has actually generated: some GPU drivers load the engine
+        // and then fail on the first request. Try the preferred accelerator, fall back to CPU.
+        val order = if (models.model.preferGpu) listOf(LlmInference.Backend.GPU, LlmInference.Backend.CPU) else listOf(LlmInference.Backend.CPU)
+        var lastError: Throwable? = null
+        for (backend in order) {
+            val candidate = runCatching { build(backend) }.getOrElse { lastError = it; continue }
+            val works = runCatching { smokeTest(candidate) }.onFailure { lastError = it }.isSuccess
+            if (works) {
+                engine = candidate
+                accelerator = backend.name.lowercase()
+                return@withContext
+            }
+            runCatching { candidate.close() }
+        }
+        throw IllegalStateException("on-device model failed to run: ${lastError?.message}", lastError)
+    }
+
+    /** One short greedy generation; throws if the accelerator can't actually run the model. */
+    private fun smokeTest(llm: LlmInference) {
+        val session = LlmInferenceSession.createFromOptions(
+            llm, LlmInferenceSession.LlmInferenceSessionOptions.builder().setTopK(1).setTemperature(0f).build(),
+        )
+        try {
+            session.addQueryChunk(models.model.promptFormat.format("Reply with OK.", "Hi"))
+            check(session.generateResponse().isNotBlank()) { "empty smoke-test output" }
+        } finally {
+            session.close()
         }
     }
 
-    override fun generate(request: GenerationRequest): Flow<String> = flow {
+    /**
+     * Streams tokens from a fresh greedy session. When the collector stops early (the engine has
+     * a complete JSON frame), generation is cancelled natively so no CPU is wasted on trailing text.
+     */
+    override fun generate(request: GenerationRequest): Flow<String> = callbackFlow {
         val llm = checkNotNull(engine) { "prepare() not called" }
-        emit(llm.generateResponse(request.systemInstruction + "\n\n" + request.prompt))
+        val session = LlmInferenceSession.createFromOptions(
+            llm,
+            LlmInferenceSession.LlmInferenceSessionOptions.builder().setTopK(1).setTemperature(0f).build(),
+        )
+        session.addQueryChunk(models.model.promptFormat.format(request.systemInstruction, request.prompt))
+        session.generateResponseAsync { partial, done ->
+            if (!partial.isNullOrEmpty()) trySend(partial)
+            if (done) close()
+        }
+        awaitClose {
+            runCatching { session.cancelGenerateResponseAsync() }
+            runCatching { session.close() }
+        }
     }.flowOn(Dispatchers.Default)
 
     override fun close() {

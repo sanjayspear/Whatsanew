@@ -113,4 +113,25 @@ class SurfaceComposerTest {
         assertEquals(Persistence.PROFILE, result.patch.persistence)
         assertIs<UiOp.UpdateTheme>(result.patch.ops.single())
     }
+
+    @Test
+    fun vagueRequestLeadsWithCategoryPicker() {
+        val s = discover(ListingQuery(near = GeoFilter(GeoAnchor.Here)))
+        assertEquals(Roles.PICKER, s.roles().first())
+        assertEquals("intent.category_picker", s.root.children.first().component)
+    }
+
+    @Test
+    fun pickerStaysOnTopEvenWhenMapIsPreferredFirst() {
+        val prefs = LayoutPrefs().apply(LayoutEdit.Move(Roles.MAP, 0))
+        val s = discover(ListingQuery(), prefs)
+        assertEquals(listOf(Roles.PICKER, Roles.MAP), s.roles().take(2))
+    }
+
+    @Test
+    fun specificRequestsHaveNoPicker() {
+        assertFalse(Roles.PICKER in discover(ListingQuery(categories = listOf("fashion"))).roles())
+        assertFalse(Roles.PICKER in discover(ListingQuery(text = "pottery")).roles())
+        assertFalse(Roles.PICKER in discover(ListingQuery(freshness = Freshness.NEW)).roles())
+    }
 }

@@ -2,6 +2,7 @@ package dev.pulse.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
@@ -37,6 +39,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import dev.pulse.core.model.ModelState
 import dev.pulse.core.pipeline.SurfaceState
 import dev.pulse.dsl.EmptyProps
 import dev.pulse.dsl.Node
@@ -46,7 +49,10 @@ import dev.pulse.ui.design.Pulse
 import dev.pulse.ui.design.PulseBackground
 import dev.pulse.ui.design.PulseIcons
 import dev.pulse.ui.design.PulseType
+import dev.pulse.ui.design.PulseTextField
+import dev.pulse.ui.design.PulseToast
 import dev.pulse.ui.design.glass
+import dev.pulse.ui.design.keyboardSafe
 import dev.pulse.ui.registry.RenderScope
 import dev.pulse.ui.registry.SurfaceRenderer
 
@@ -65,7 +71,12 @@ fun DiscoverScreen(
     onBack: () -> Unit,
     initialText: String = "",
     listening: Boolean = false,
+    modelState: ModelState = ModelState.Unsupported,
+    llmDiagnostic: String? = null,
+    modelLabel: String = "",
+    onDownloadModel: () -> Unit = {},
     showDiagnostics: Boolean = true,
+    toast: String? = null,
 ) {
     val haze = remember { HazeState() }
     PulseBackground {
@@ -88,6 +99,8 @@ fun DiscoverScreen(
         )
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             NeuButton(PulseIcons.Back, null, onBack, size = 40)
+            Spacer(Modifier.width(10.dp))
+            AiModelChip(modelState, modelLabel, onDownloadModel)
             Spacer(Modifier.weight(1f))
             val latency = state.lastLatencyMs
             if (showDiagnostics && latency != null) {
@@ -99,6 +112,16 @@ fun DiscoverScreen(
                 )
             }
         }
+        if (showDiagnostics && llmDiagnostic != null) {
+            BasicText(
+                llmDiagnostic,
+                style = PulseType.label.copy(color = Pulse.colors.textSecondary),
+                maxLines = 4,
+                modifier = Modifier.align(Alignment.BottomCenter).keyboardSafe().padding(bottom = 92.dp, start = 24.dp, end = 24.dp)
+                    .clip(RoundedCornerShape(12.dp)).background(Pulse.colors.backgroundTop.copy(alpha = 0.8f)).padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
+        PulseToast(toast)
         IntentBar(
             haze = haze,
             initialText = initialText,
@@ -106,9 +129,35 @@ fun DiscoverScreen(
             onSubmit = onSubmit,
             onMic = onMic,
             onCamera = onCamera,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).keyboardSafe().padding(16.dp),
         )
     }
+}
+
+/**
+ * Offers the universal on-device model. The app is fully usable without it (rules rung); the
+ * model adds understanding for free-form requests. Nothing downloads without a tap.
+ */
+@Composable
+fun AiModelChip(state: ModelState, label: String, onDownload: () -> Unit) {
+    val c = Pulse.colors
+    val text = when (state) {
+        ModelState.Unsupported, ModelState.Ready -> return
+        ModelState.NotInstalled -> "Add on-device AI · ${label.substringAfter("· ")}"
+        is ModelState.Downloading -> "Downloading AI ${(state.fraction * 100).toInt()}%"
+        ModelState.Verifying -> "Verifying AI model…"
+        is ModelState.Failed -> "AI download failed · retry"
+    }
+    val tappable = state == ModelState.NotInstalled || state is ModelState.Failed
+    BasicText(
+        text,
+        style = PulseType.label.copy(color = c.accent),
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(c.backgroundTop.copy(alpha = 0.6f))
+            .then(if (tappable) Modifier.clickable(onClick = onDownload) else Modifier)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    )
 }
 
 @Composable
@@ -135,19 +184,15 @@ fun IntentBar(
     ) {
         Image(PulseIcons.Spark, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.accent))
         Spacer(Modifier.width(12.dp))
-        Box(Modifier.weight(1f)) {
-            if (text.isEmpty()) BasicText(if (listening) "Listening…" else "Ask for anything nearby…", style = PulseType.body.copy(color = if (listening) c.accent else c.textSecondary))
-            BasicTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                textStyle = PulseType.body.copy(color = c.textPrimary),
-                cursorBrush = SolidColor(c.accent),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { if (text.isNotBlank()) onSubmit(text) }),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        PulseTextField(
+            value = text,
+            onValueChange = { text = it },
+            placeholder = if (listening) "Listening…" else "Ask for anything nearby…",
+            placeholderColor = if (listening) c.accent else null,
+            onSubmit = onSubmit,
+            modifier = Modifier.weight(1f),
+            testTag = "intent-input",
+        )
         NeuButton(PulseIcons.Mic, if (listening) "Listening" else null, onMic, size = 42)
         Spacer(Modifier.width(10.dp))
         NeuButton(PulseIcons.Camera, null, onCamera, size = 42)

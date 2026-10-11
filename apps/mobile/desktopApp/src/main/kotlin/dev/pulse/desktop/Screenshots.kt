@@ -8,6 +8,7 @@ import androidx.compose.ui.use
 import dev.pulse.core.ai.IntentInput
 import dev.pulse.core.ai.Modality
 import dev.pulse.core.platform.PlatformContext
+import dev.pulse.core.prefs.UserRole
 import dev.pulse.ui.PulseApp
 import dev.pulse.ui.PulseGraph
 import dev.pulse.ui.Screen
@@ -25,8 +26,9 @@ fun main(args: Array<String>) {
     val heightDp = 892
     val density = 2.5f
 
-    fun shoot(name: String, startScreen: Screen, heightOverrideDp: Int = heightDp, setup: suspend PulseGraph.() -> Unit = {}) {
-        val graph = PulseGraph.create(PlatformContext(), launcher = { })
+    fun shoot(name: String, startScreen: Screen, heightOverrideDp: Int = heightDp, firstLaunch: Boolean = false, setup: suspend PulseGraph.() -> Unit = {}) {
+        val graph = PulseGraph.create(PlatformContext(), launcher = { }, useSampleData = true)
+        if (!firstLaunch) graph.roles.setRole(UserRole.REGULAR) // past the one-time role question
         runBlocking { graph.setup() }
         ImageComposeScene((widthDp * density).toInt(), (heightOverrideDp * density).toInt(), Density(density)) {
             PulseApp(graph, startScreen)
@@ -57,4 +59,7 @@ fun main(args: Array<String>) {
     shoot("06-camera-voice-dosa", Screen.Discover) { say("Where can I get this near me, something cheap?", "dosa", "plate") }
     shoot("07-landing-warm-theme", Screen.Landing) { say("Change my app theme to something warm and quieter.") }
     shoot("08-unclear-intent-suggestions", Screen.Discover) { say("hmm") }
+    shoot("09-first-launch-role", Screen.Landing, firstLaunch = true)
+    shoot("10-vague-request-category-picker", Screen.Discover) { say("show me something nearby") }
+    shoot("11-fashion-across-categories", Screen.Discover) { say("fashion near Koramangala") }
 }

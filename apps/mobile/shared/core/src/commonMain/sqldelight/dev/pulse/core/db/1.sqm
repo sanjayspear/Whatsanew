@@ -1,0 +1,10 @@
+-- Migration 1 -> 2 (session 2, 2026-10-12). Existing installs only; fresh installs get Pulse.sq.
+-- RULE: every schema change in Pulse.sq needs a matching N.sqm here, or updates crash on launch.
+
+CREATE INDEX IF NOT EXISTS listing_cache_lat_lng ON listing_cache(lat, lng);
+
+CREATE TABLE IF NOT EXISTS saved_listing (
+    listing_id TEXT NOT NULL PRIMARY KEY,
+    json TEXT NOT NULL,
+    saved_at INTEGER NOT NULL
+);

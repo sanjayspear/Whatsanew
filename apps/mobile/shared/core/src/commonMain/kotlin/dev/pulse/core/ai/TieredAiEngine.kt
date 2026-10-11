@@ -9,7 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.fold
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -28,7 +29,8 @@ class TieredAiEngine(
     private val ladder: List<LanguageModelBackend>,
     private val thermal: ThermalMonitor = ThermalMonitor { false },
     private val llmThreshold: Float = 0.75f,
-    private val llmTimeoutMs: Long = 2_500,
+    /** Refinement happens after first paint, so it may take a few seconds without blocking anyone. */
+    private val llmTimeoutMs: Long = 8_000,
 ) : AiEngine {
 
     private val _status = MutableStateFlow(EngineStatus(ladder = ladder.map { BackendState(it.id, BackendAvailability.UNAVAILABLE) }))
@@ -36,6 +38,14 @@ class TieredAiEngine(
 
     private val warmUpLock = Mutex()
     private var active: LanguageModelBackend? = null
+
+    override suspend fun refresh() {
+        warmUpLock.withLock {
+            active?.let { runCatching { it.close() } }
+            active = null
+        }
+        warmUp()
+    }
 
     override suspend fun warmUp() = warmUpLock.withLock {
         if (active != null) return@withLock
@@ -55,19 +65,56 @@ class TieredAiEngine(
         if (provisional.confidence >= llmThreshold || throttled) return@flow
 
         val mark = TimeSource.Monotonic.markNow()
+        var failure: String? = null
+        var acc = ""
+        var firstTokenMs = -1L
         val raw = try {
             withTimeoutOrNull(llmTimeoutMs) {
-                backend.generate(LlmPrompt.request(input, context)).fold("") { acc, chunk -> acc + chunk }
+                // Stop as soon as the first complete JSON object has arrived; upstream is cancelled.
+                backend.generate(LlmPrompt.request(input, context))
+                    .takeWhile { chunk ->
+                        if (firstTokenMs < 0) firstTokenMs = mark.elapsedNow().inWholeMilliseconds
+                        acc += chunk
+                        LlmPrompt.parse(acc) == null
+                    }
+                    .collect()
+                acc
+            } ?: run {
+                failure = "timeout ${llmTimeoutMs} ms · first token ${firstTokenMs} ms · ${acc.length} chars: " +
+                    acc.take(60).replace('\n', ' ')
+                null
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            failure = "error: ${e.message?.take(60)}"
             null
-        } ?: return@flow
+        }
+        val elapsed = mark.elapsedNow().inWholeMilliseconds
+        if (raw == null) {
+            record(failure ?: "no output")
+            return@flow
+        }
+        val proposed = LlmPrompt.parse(raw)
+        if (proposed == null) {
+            record("unparseable after $elapsed ms: ${raw.take(80).replace('\n', ' ')}")
+            return@flow
+        }
+        if (proposed.task == Task.UNKNOWN && provisional.task != Task.UNKNOWN) {
+            record("model unsure after $elapsed ms")
+            return@flow
+        }
+        val merged = FrameMerge.merge(provisional, proposed) { place -> rules.mentionsPlace(input, place) }
+        if (merged.query == provisional.query && merged.task == provisional.task) {
+            record("no new information after $elapsed ms")
+            return@flow
+        }
+        record("refined in $elapsed ms")
+        emit(FrameEvent.Refined(merged.copy(source = FrameSource.ON_DEVICE_LLM), backend.id, elapsed))
+    }
 
-        val refined = LlmPrompt.parse(raw) ?: return@flow
-        if (refined.task == Task.UNKNOWN && provisional.task != Task.UNKNOWN) return@flow
-        emit(FrameEvent.Refined(refined.copy(source = FrameSource.ON_DEVICE_LLM), backend.id, mark.elapsedNow().inWholeMilliseconds))
+    private fun record(outcome: String) {
+        _status.value = _status.value.copy(lastLlm = outcome)
     }
 
     override fun close() {

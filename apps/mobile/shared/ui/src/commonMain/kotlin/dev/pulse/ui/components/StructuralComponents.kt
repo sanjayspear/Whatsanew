@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,7 +40,8 @@ object LayoutStackComponent : PulseComponent {
     @Composable
     override fun Render(node: Node, scope: RenderScope, modifier: Modifier) {
         // Clear the system bars plus the host chrome (back button above, intent bar below).
-        val bars = WindowInsets.systemBars.asPaddingValues()
+        // Includes the keyboard, so a focused field inside a surface ("Other" category) scrolls above it.
+        val bars = WindowInsets.systemBars.union(WindowInsets.ime).asPaddingValues()
         LazyColumn(
             modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -83,7 +86,8 @@ object ListCardsComponent : PulseComponent {
     override fun Render(node: Node, scope: RenderScope, modifier: Modifier) {
         val bind = node.bind ?: return
         val template = bind.template ?: return
-        val items = remember(bind) { scope.resolve(bind) }
+        val resolution = remember(bind, scope.dataVersion) { scope.resolve(bind) }
+        val items = resolution.items
         Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             val order = when (bind.rank.strategy) {
                 RankStrategy.PERSONAL -> "ranked for you"
@@ -93,15 +97,41 @@ object ListCardsComponent : PulseComponent {
                 RankStrategy.POPULAR -> "most loved"
             }
             BasicText("${items.size} ${if (items.size == 1) "pick" else "picks"} · $order".uppercase(), style = PulseType.overline, modifier = Modifier.padding(start = 4.dp))
+            if (resolution.widened && items.isNotEmpty()) {
+                BasicText(
+                    run {
+                        val asked = Format.distance(resolution.requestedRadiusMeters.toDouble())
+                        val shown = Format.distance(resolution.radiusMeters.toDouble())
+                        when (resolution.withinRequested) {
+                            0 -> "Nothing within $asked, so here are the nearest within $shown."
+                            1 -> "Only 1 place within $asked, so here are more within $shown."
+                            else -> "Only ${resolution.withinRequested} places within $asked, so here are more within $shown."
+                        }
+                    },
+                    style = PulseType.body,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
             if (items.isEmpty()) {
                 val wider = (bind.query.near?.radiusMeters ?: 5_000) * 2
+                val status = scope.dataStatus
                 BasicText(
-                    "Nothing here yet. Tap to look within ${Format.distance(wider.toDouble())}",
+                    when {
+                        status.loading -> "Looking around for places…"
+                        status.notice != null -> status.notice
+                        else -> "Nothing found here yet. Tap to look within ${Format.distance(wider.toDouble())}"
+                    },
                     style = PulseType.body,
-                    modifier = Modifier.fillMaxWidth().glass().clickable { scope.submitIntent("within ${wider / 1000} km") }.padding(20.dp),
+                    modifier = Modifier.fillMaxWidth().glass()
+                        .then(if (status.loading) Modifier else Modifier.clickable { scope.submitIntent("within ${wider / 1000} km") })
+                        .padding(20.dp),
                 )
             }
             items.forEach { item -> scope.withItem(item).RenderNode(template) }
+            if (items.any { it.item.id.startsWith("osm:") }) {
+                // Required attribution for OpenStreetMap data (ODbL).
+                BasicText("Places © OpenStreetMap contributors", style = PulseType.label, modifier = Modifier.padding(start = 4.dp))
+            }
         }
     }
 }
@@ -114,7 +144,7 @@ object ListVideosComponent : PulseComponent {
     override fun Render(node: Node, scope: RenderScope, modifier: Modifier) {
         val bind = node.bind ?: return
         val template = bind.template ?: return
-        val items = remember(bind) { scope.resolve(bind).filter { it.item.videoId != null } }
+        val items = remember(bind, scope.dataVersion) { scope.resolve(bind).items.filter { it.item.videoId != null } }
         if (items.isEmpty()) return
         Column(modifier.fillMaxWidth()) {
             BasicText("TRAILERS & PREVIEWS", style = PulseType.overline, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
@@ -157,5 +187,6 @@ val DefaultRegistry = dev.pulse.ui.registry.ComponentRegistry(
     listOf(
         LayoutStackComponent, HeroHeaderComponent, ListCardsComponent, ListVideosComponent, IntentSuggestionsComponent,
         GlassCardComponent, MapStackComponent, VideoTileComponent, ActionSheetComponent, GeometricButtonComponent,
+        CategoryPickerComponent, RolePickerComponent, SavedShelfComponent,
     ),
 )

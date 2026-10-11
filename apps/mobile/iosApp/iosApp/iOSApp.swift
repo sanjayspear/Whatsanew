@@ -17,7 +17,9 @@ struct ComposeView: UIViewControllerRepresentable {
         let platform = PlatformContext(
             llm: FoundationModelsBridge.makeIfSupported(),
             speech: SpeechBridge(),
-            crypto: CryptoBridge()
+            crypto: CryptoBridge(),
+            mediaPipe: MediaPipeBridge(),
+            modelStore: ModelStoreBridge()
         )
         return MainViewControllerKt.MainViewController(context: platform)
     }

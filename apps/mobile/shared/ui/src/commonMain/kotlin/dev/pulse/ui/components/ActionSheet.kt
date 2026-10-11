@@ -49,6 +49,7 @@ fun ActionSheet(
     onAction: (ActionSpec) -> Unit,
     modifier: Modifier = Modifier,
     maxVisible: Int = 4,
+    isActive: (ActionSpec) -> Boolean = { false },
 ) {
     // Actions are ordered by importance in the template; overflow (e.g. Share) moves to long-press.
     val usable = actions.filter { a -> a.args.values.none { it.startsWith("\$item.") && resolveArg(it, item) == null } }.take(maxVisible)
@@ -56,13 +57,27 @@ fun ActionSheet(
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         usable.forEachIndexed { i, action ->
             val resolved = action.copy(args = action.args.mapValues { (_, v) -> resolveArg(v, item) ?: v })
-            NeuButton(icon = iconFor(action.kind), label = if (i == 0) labelFor(action.kind) else null, onClick = { onAction(resolved) })
+            NeuButton(
+                icon = iconFor(action.kind),
+                label = if (i == 0) labelFor(action.kind) else null,
+                onClick = { onAction(resolved) },
+                active = isActive(resolved),
+                description = descriptionFor(action.kind, isActive(resolved)),
+            )
         }
     }
 }
 
 @Composable
-fun NeuButton(icon: ImageVector, label: String?, onClick: () -> Unit, modifier: Modifier = Modifier, size: Int = 38) {
+fun NeuButton(
+    icon: ImageVector,
+    label: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Int = 38,
+    active: Boolean = false,
+    description: String? = null,
+) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val shape = if (label == null) CircleShape else RoundedCornerShape(50)
@@ -71,14 +86,14 @@ fun NeuButton(icon: ImageVector, label: String?, onClick: () -> Unit, modifier: 
         modifier
             .height(size.dp)
             .then(if (label == null) Modifier.width(size.dp) else Modifier)
-            .neumorphic(shape, pressed)
+            .neumorphic(shape, pressed || active) // active (e.g. saved) stays debossed, with an accent icon
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = label ?: icon.name }
+            .semantics { contentDescription = description ?: label ?: icon.name }
             .padding(horizontal = if (label == null) 0.dp else 14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(icon, null, Modifier.size((size * 0.47).dp), colorFilter = ColorFilter.tint(if (label != null) colors.accent else colors.textPrimary))
+            Image(icon, null, Modifier.size((size * 0.47).dp), colorFilter = ColorFilter.tint(if (label != null || active) colors.accent else colors.textPrimary))
             if (label != null) {
                 Spacer(Modifier.width(6.dp))
                 BasicText(label, style = PulseType.label.copy(color = colors.accent))
@@ -100,6 +115,14 @@ private fun iconFor(kind: ActionKind) = when (kind) {
     ActionKind.OPEN_URL, ActionKind.REFINE -> PulseIcons.Spark
 }
 
+private fun descriptionFor(kind: ActionKind, active: Boolean) = when (kind) {
+    ActionKind.SAVE -> if (active) "Remove from saved" else "Save"
+    ActionKind.SHARE -> "Share"
+    ActionKind.CALL -> "Call"
+    ActionKind.NAVIGATE -> "Directions"
+    else -> null
+}
+
 private fun labelFor(kind: ActionKind) = when (kind) {
     ActionKind.CALL -> "Call"
     ActionKind.NAVIGATE -> "Go"
@@ -117,6 +140,10 @@ object ActionSheetComponent : PulseComponent {
 
     @Composable
     override fun Render(node: Node, scope: RenderScope, modifier: Modifier) {
-        ActionSheet(node.actions, scope.item, { scope.dispatch(it, scope.item) }, modifier)
+        ActionSheet(node.actions, scope.item, { scope.dispatch(it, scope.item) }, modifier, isActive = { scope.isActive(it) })
     }
 }
+
+/** Saved state for the Save button; other actions have no on/off state. */
+internal fun RenderScope.isActive(action: ActionSpec): Boolean =
+    action.kind == ActionKind.SAVE && action.args["listingId"]?.let(session::isSaved) == true

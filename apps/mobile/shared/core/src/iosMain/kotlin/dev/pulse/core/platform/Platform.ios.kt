@@ -12,8 +12,16 @@ import dev.pulse.core.ai.ThermalMonitor
 import dev.pulse.core.ai.TieredAiEngine
 import dev.pulse.core.ai.Transcript
 import dev.pulse.core.data.Gazetteer
+import dev.pulse.core.data.LocationTracker
 import dev.pulse.core.db.PulseDatabase
+import dev.pulse.core.model.ModelManager
+import dev.pulse.core.model.ModelState
+import dev.pulse.core.model.OnDeviceModel
 import dev.pulse.core.model.SignatureVerifier
+import dev.pulse.core.model.UnsupportedModelManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.io.encoding.Base64
@@ -28,19 +36,73 @@ actual class PlatformContext(
     val llm: NativeLlmBridge? = null,
     val speech: NativeSpeechBridge? = null,
     val crypto: NativeCryptoBridge? = null,
+    val mediaPipe: NativeMediaPipeBridge? = null,
+    val modelStore: NativeModelBridge? = null,
 )
 
 /**
- * iOS ladder:
- *  1. Apple Foundation Models (on-device ~3B, iOS 26+ on Apple Intelligence devices), via Swift bridge.
- *  2. (P3) llama.cpp + Gemma INT4 GGUF via cinterop for older devices.
+ * iOS ladder (same universal model as Android):
+ *  1. Qwen2.5-0.5B (Apache-2.0) via MediaPipe LLM Inference: every supported iPhone, downloaded once.
+ *  2. Apple Foundation Models: optional accelerator on Apple Intelligence devices.
  *  3. Rules: always.
  */
-actual fun createPlatformAiEngine(context: PlatformContext, gazetteer: Gazetteer): AiEngine = TieredAiEngine(
+actual fun createPlatformAiEngine(context: PlatformContext, gazetteer: Gazetteer, models: ModelManager): AiEngine = TieredAiEngine(
     rules = RuleBasedIntentParser(gazetteer),
-    ladder = listOfNotNull(context.llm?.let(::FoundationModelsBackend)),
+    ladder = listOfNotNull(
+        context.mediaPipe?.let { MediaPipeIosBackend(it, models) },
+        context.llm?.let(::FoundationModelsBackend),
+    ),
     thermal = ThermalMonitor { context.llm?.isThermallyThrottled() ?: false },
 )
+
+actual fun createModelManager(context: PlatformContext, model: OnDeviceModel): ModelManager =
+    context.modelStore?.let { IosModelManager(it, model) } ?: UnsupportedModelManager(model)
+
+private class MediaPipeIosBackend(private val bridge: NativeMediaPipeBridge, private val models: ModelManager) : LanguageModelBackend {
+    override val id = "mediapipe-" + models.model.id
+    override suspend fun availability() =
+        if (models.installedPath() != null) BackendAvailability.AVAILABLE else BackendAvailability.DOWNLOADABLE
+
+    override suspend fun prepare() {
+        check(bridge.load(checkNotNull(models.installedPath()))) { "MediaPipe failed to load model" }
+    }
+
+    override fun generate(request: GenerationRequest): Flow<String> = flow {
+        val prompt = models.model.promptFormat.format(request.systemInstruction, request.prompt)
+        emit(suspendCancellableCoroutine { cont ->
+            bridge.generate(prompt) { text, error ->
+                if (text != null) cont.resume(text) else cont.resumeWithException(IllegalStateException(error ?: "generation failed"))
+            }
+        })
+    }
+
+    override fun close() = bridge.close()
+}
+
+private class IosModelManager(private val bridge: NativeModelBridge, override val model: OnDeviceModel) : ModelManager {
+    private val _state = MutableStateFlow<ModelState>(if (bridge.installedPath(model.id) != null) ModelState.Ready else ModelState.NotInstalled)
+    override val state: StateFlow<ModelState> = _state.asStateFlow()
+    override fun installedPath(): String? = bridge.installedPath(model.id)
+
+    override suspend fun download() {
+        if (installedPath() != null) { _state.value = ModelState.Ready; return }
+        suspendCancellableCoroutine { cont ->
+            bridge.download(
+                model.id, model.url, model.sha256,
+                onProgress = { _state.value = if (it >= 1.0) ModelState.Verifying else ModelState.Downloading(it.toFloat()) },
+                onDone = { _, error ->
+                    _state.value = if (error == null) ModelState.Ready else ModelState.Failed(error)
+                    cont.resume(Unit)
+                },
+            )
+        }
+    }
+
+    override fun delete() {
+        bridge.delete(model.id)
+        _state.value = ModelState.NotInstalled
+    }
+}
 
 private class FoundationModelsBackend(private val bridge: NativeLlmBridge) : LanguageModelBackend {
     override val id = "apple-foundation-models"
@@ -81,3 +143,12 @@ actual fun createSignatureVerifier(context: PlatformContext, publicKeyBase64: St
 }
 
 actual fun createSqlDriver(context: PlatformContext): SqlDriver = NativeSqliteDriver(PulseDatabase.Schema, "pulse.db")
+
+actual fun createLocationTracker(context: PlatformContext): LocationTracker = IosLocationTracker()
+
+actual fun createHttpClient(): io.ktor.client.HttpClient = io.ktor.client.HttpClient(io.ktor.client.engine.darwin.Darwin) {
+    install(io.ktor.client.plugins.HttpTimeout) {
+        connectTimeoutMillis = 10_000
+        requestTimeoutMillis = 30_000
+    }
+}

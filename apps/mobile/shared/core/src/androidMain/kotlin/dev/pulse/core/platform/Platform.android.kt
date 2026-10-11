@@ -12,27 +12,30 @@ import dev.pulse.core.ai.SpeechEngine
 import dev.pulse.core.ai.ThermalMonitor
 import dev.pulse.core.ai.TieredAiEngine
 import dev.pulse.core.data.Gazetteer
+import dev.pulse.core.data.LocationTracker
 import dev.pulse.core.db.PulseDatabase
+import dev.pulse.core.model.ModelManager
+import dev.pulse.core.model.OnDeviceModel
 import dev.pulse.core.model.SignatureVerifier
-import java.io.File
 import java.util.Base64
 
 /** Wraps the Android [Context]; created once from `Application`. */
 actual class PlatformContext(val android: Context)
 
 /**
- * Android ladder:
- *  1. Gemini Nano via AICore: zero app-size cost, on Pixel 8+/Galaxy S24+ class devices.
- *  2. Gemma 3 1B / Gemma 2B INT4 via MediaPipe LLM Inference: OTA-delivered, any device with >= 6 GB RAM.
+ * Android ladder (same universal model as iOS):
+ *  1. Qwen2.5-0.5B (Apache-2.0) via MediaPipe LLM Inference: any arm64 phone with >= 4 GB RAM,
+ *     downloaded once on demand.
+ *  2. Gemini Nano via AICore: optional accelerator on supported flagships (integration point).
  *  3. Rules: always.
  */
-actual fun createPlatformAiEngine(context: PlatformContext, gazetteer: Gazetteer): AiEngine {
+actual fun createPlatformAiEngine(context: PlatformContext, gazetteer: Gazetteer, models: ModelManager): AiEngine {
     val app = context.android.applicationContext
     return TieredAiEngine(
         rules = RuleBasedIntentParser(gazetteer),
         ladder = listOf(
+            MediaPipeLlmBackend(app, models),
             GeminiNanoBackend(app),
-            MediaPipeLlmBackend(app) { File(app.filesDir, "models/pulse-intent/active/model.task") },
         ),
         thermal = ThermalMonitor {
             val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -40,6 +43,9 @@ actual fun createPlatformAiEngine(context: PlatformContext, gazetteer: Gazetteer
         },
     )
 }
+
+actual fun createModelManager(context: PlatformContext, model: OnDeviceModel): ModelManager =
+    AndroidModelManager(context.android.applicationContext, model)
 
 actual fun createSpeechEngine(context: PlatformContext): SpeechEngine = AndroidSpeechEngine(context.android.applicationContext)
 
@@ -52,3 +58,13 @@ actual fun createSignatureVerifier(context: PlatformContext, publicKeyBase64: St
 
 actual fun createSqlDriver(context: PlatformContext): SqlDriver =
     AndroidSqliteDriver(PulseDatabase.Schema, context.android.applicationContext, "pulse.db")
+
+actual fun createLocationTracker(context: PlatformContext): LocationTracker =
+    AndroidLocationTracker(context.android.applicationContext)
+
+actual fun createHttpClient(): io.ktor.client.HttpClient = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+    install(io.ktor.client.plugins.HttpTimeout) {
+        connectTimeoutMillis = 10_000
+        requestTimeoutMillis = 30_000
+    }
+}

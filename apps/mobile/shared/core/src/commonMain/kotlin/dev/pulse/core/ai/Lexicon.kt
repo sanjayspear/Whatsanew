@@ -7,10 +7,28 @@ package dev.pulse.core.ai
  */
 object Lexicon {
 
-    data class CategoryHit(val category: String, val text: String? = null)
+    /** A phrase can stand for several categories: "events" covers theatre, music, comedy, workshops. */
+    data class CategoryHit(val categories: List<String>, val text: String? = null) {
+        constructor(category: String, text: String? = null) : this(listOf(category), text)
+    }
+
+    /** Umbrella keys shared with the category picker so "Events" means the same everywhere. */
+    val EVENTS = listOf("events", "arts", "music", "comedy")
 
     /** Longest phrases first so "live music" beats "music" and "south indian" beats "indian". */
     val categories: List<Pair<String, CategoryHit>> = listOf(
+        // --- multi-word first ---
+        "things to do" to CategoryHit(EVENTS),
+        "guest house" to CategoryHit("stay.hotel"),
+        "guest houses" to CategoryHit("stay.hotel"),
+        "medical store" to CategoryHit("health.pharmacy"),
+        "medical shop" to CategoryHit("health.pharmacy"),
+        "petrol bunk" to CategoryHit("services.fuel"),
+        "petrol pump" to CategoryHit("services.fuel"),
+        "ev charging" to CategoryHit("services.fuel"),
+        "ethnic wear" to CategoryHit("fashion.ethnic"),
+        "street wear" to CategoryHit("fashion.streetwear"),
+        "shopping mall" to CategoryHit("shopping.mall"),
         "south indian" to CategoryHit("food.restaurant.south_indian"),
         "live music" to CategoryHit("music.live"),
         "stand up" to CategoryHit("comedy.standup"),
@@ -52,8 +70,9 @@ object Lexicon {
         "gig" to CategoryHit("music.live"),
         "comedy" to CategoryHit("comedy.standup"),
         "yoga" to CategoryHit("fitness.yoga"),
-        "gyms" to CategoryHit("fitness.gym"),
-        "gym" to CategoryHit("fitness.gym"),
+        // "gym" in OSM is split across fitness centres and sports centres; people mean both.
+        "gyms" to CategoryHit("fitness"),
+        "gym" to CategoryHit("fitness"),
         "fitness" to CategoryHit("fitness"),
         "bookstores" to CategoryHit("shopping.books"),
         "bookstore" to CategoryHit("shopping.books"),
@@ -61,6 +80,73 @@ object Lexicon {
         "shopping" to CategoryHit("shopping"),
         "markets" to CategoryHit("shopping.market"),
         "market" to CategoryHit("shopping.market"),
+        "malls" to CategoryHit("shopping.mall"),
+        "mall" to CategoryHit("shopping.mall"),
+        "electronics" to CategoryHit("shopping.electronics"),
+        // --- fashion ---
+        "fashion" to CategoryHit("fashion"),
+        "clothes" to CategoryHit("fashion"),
+        "clothing" to CategoryHit("fashion"),
+        "apparel" to CategoryHit("fashion"),
+        "boutiques" to CategoryHit("fashion.boutique"),
+        "boutique" to CategoryHit("fashion.boutique"),
+        "streetwear" to CategoryHit("fashion.streetwear"),
+        "sarees" to CategoryHit("fashion.ethnic"),
+        "saree" to CategoryHit("fashion.ethnic"),
+        "sneakers" to CategoryHit("fashion.footwear"),
+        "shoes" to CategoryHit("fashion.footwear"),
+        "thrift" to CategoryHit("fashion.thrift"),
+        // --- events (umbrella) ---
+        "events" to CategoryHit(EVENTS),
+        "event" to CategoryHit(EVENTS),
+        "workshops" to CategoryHit("events.workshop"),
+        "workshop" to CategoryHit("events.workshop"),
+        "festival" to CategoryHit(EVENTS),
+        "festivals" to CategoryHit(EVENTS),
+        // --- food (umbrella) ---
+        "food" to CategoryHit("food"),
+        "eat" to CategoryHit("food"),
+        "lunch" to CategoryHit("food"),
+        "dinner" to CategoryHit("food"),
+        "breakfast" to CategoryHit("food"),
+        "bakery" to CategoryHit("food.bakery"),
+        "bakeries" to CategoryHit("food.bakery"),
+        // --- fitness ---
+        "workout" to CategoryHit("fitness"),
+        "pilates" to CategoryHit("fitness.pilates"),
+        "swimming" to CategoryHit("fitness.swimming"),
+        "running" to CategoryHit("fitness.running"),
+        // --- hidden gems / outdoors ---
+        "parks" to CategoryHit("gems.park"),
+        "park" to CategoryHit("gems.park"),
+        "lakes" to CategoryHit("gems.lake"),
+        "lake" to CategoryHit("gems.lake"),
+        "museum" to CategoryHit("arts.museum"),
+        "museums" to CategoryHit("arts.museum"),
+        // --- stays (note: in Indian English "hotel" can also mean an eatery; we read it as lodging) ---
+        "hotels" to CategoryHit("stay.hotel"),
+        "hotel" to CategoryHit("stay.hotel"),
+        "lodges" to CategoryHit("stay.hotel"),
+        "lodge" to CategoryHit("stay.hotel"),
+        "hostels" to CategoryHit("stay.hotel"),
+        "hostel" to CategoryHit("stay.hotel"),
+        "resorts" to CategoryHit("stay.hotel"),
+        "resort" to CategoryHit("stay.hotel"),
+        "homestay" to CategoryHit("stay.hotel"),
+        "stay" to CategoryHit("stay"),
+        // --- essentials ---
+        "pharmacy" to CategoryHit("health.pharmacy"),
+        "pharmacies" to CategoryHit("health.pharmacy"),
+        "chemist" to CategoryHit("health.pharmacy"),
+        "hospital" to CategoryHit("health.hospital"),
+        "hospitals" to CategoryHit("health.hospital"),
+        "clinic" to CategoryHit("health.hospital"),
+        "clinics" to CategoryHit("health.hospital"),
+        "atm" to CategoryHit("services.atm"),
+        "atms" to CategoryHit("services.atm"),
+        "bank" to CategoryHit("services.atm"),
+        "petrol" to CategoryHit("services.fuel"),
+        "fuel" to CategoryHit("services.fuel"),
     )
 
     val freshNew = listOf("newly opened", "just opened", "new", "latest", "newest")

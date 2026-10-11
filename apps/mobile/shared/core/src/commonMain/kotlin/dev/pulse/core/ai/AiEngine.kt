@@ -18,6 +18,9 @@ interface AiEngine {
     /** Loads model weights / opens sessions off the main thread. Safe to call repeatedly. */
     suspend fun warmUp()
 
+    /** Re-evaluates the ladder, e.g. right after a model download finished (hot-swap, no restart). */
+    suspend fun refresh()
+
     fun understand(input: IntentInput, context: IntentContext): Flow<FrameEvent>
 
     fun close()
@@ -50,6 +53,8 @@ data class EngineStatus(
     val activeBackend: String = "rules",
     val ladder: List<BackendState> = emptyList(),
     val thermalThrottled: Boolean = false,
+    /** Outcome of the most recent LLM attempt, for the diagnostics pill and telemetry. */
+    val lastLlm: String? = null,
 )
 
 data class BackendState(val id: String, val availability: BackendAvailability)

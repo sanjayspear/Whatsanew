@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.pulse.ui.components.GeometricRotatingButton
+import dev.pulse.ui.components.NeuButton
 import dev.pulse.ui.design.Pulse
 import dev.pulse.ui.design.PulseBackground
 import dev.pulse.ui.design.PulseIcons
@@ -26,12 +27,14 @@ import dev.pulse.ui.design.PulseType
 
 /** The only fixed screen in the app (by design): the two-door entry. */
 @Composable
-fun LandingScreen(onWhatsNew: () -> Unit, onLegacy: () -> Unit) {
+fun LandingScreen(onWhatsNew: () -> Unit, onLegacy: () -> Unit, onSettings: () -> Unit = {}) {
     PulseBackground {
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 20.dp, vertical = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(PulseIcons.Spark, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(Pulse.colors.accent))
                 BasicText("pulse", style = PulseType.title.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.04.em), modifier = Modifier.padding(start = 8.dp))
+                Spacer(Modifier.weight(1f))
+                NeuButton(PulseIcons.Settings, null, onSettings, size = 40)
             }
             BasicText("What's happening\naround you", style = PulseType.display, modifier = Modifier.padding(top = 28.dp))
             BasicText("Bengaluru · speak, type or point your camera", style = PulseType.body, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))

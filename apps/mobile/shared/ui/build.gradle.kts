@@ -19,6 +19,8 @@ kotlin {
             api(libs.compose.runtime)
             api(libs.compose.foundation)
             api(libs.compose.ui)
+            implementation(libs.compose.ui.backhandler)
+            implementation(libs.compose.components.resources)
             implementation(libs.haze)
             implementation(libs.kotlinx.datetime)
             implementation(libs.koin.compose)
@@ -27,5 +29,15 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.compose.ui.test)
         }
+        getByName("desktopTest").dependencies {
+            implementation(compose.desktop.currentOs)
+        }
     }
+}
+
+// Bundled resources (offline OpenStreetMap region packs) live in src/commonMain/composeResources.
+compose.resources {
+    publicResClass = false
+    packageOfResClass = "dev.pulse.ui.res"
+    generateResClass = always
 }
