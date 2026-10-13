@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +21,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -40,6 +43,7 @@ import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.pulse.core.model.ModelState
+import kotlinx.coroutines.delay
 import dev.pulse.core.pipeline.SurfaceState
 import dev.pulse.dsl.EmptyProps
 import dev.pulse.dsl.Node
@@ -67,7 +71,8 @@ fun DiscoverScreen(
     scope: RenderScope,
     onSubmit: (String) -> Unit,
     onMic: () -> Unit,
-    onCamera: () -> Unit,
+    /** Null hides the camera button (visual search isn't available yet). */
+    onCamera: (() -> Unit)?,
     onBack: () -> Unit,
     initialText: String = "",
     listening: Boolean = false,
@@ -75,10 +80,23 @@ fun DiscoverScreen(
     llmDiagnostic: String? = null,
     modelLabel: String = "",
     onDownloadModel: () -> Unit = {},
-    showDiagnostics: Boolean = true,
+    /** Engineering overlay (latency pill, AI / data errors). Off in the product UI. */
+    showDiagnostics: Boolean = false,
     toast: String? = null,
+    /** Clears the current search and its results (history is untouched). */
+    onClear: () -> Unit = {},
+    suggest: suspend (String) -> List<String> = { emptyList() },
 ) {
     val haze = remember { HazeState() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    var text by remember(initialText) { mutableStateOf(initialText) }
+    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var typing by remember { mutableStateOf(false) }
+    LaunchedEffect(text, typing) {
+        if (!typing || text.isBlank()) { suggestions = emptyList(); return@LaunchedEffect }
+        delay(180) // debounce keystrokes
+        suggestions = suggest(text)
+    }
     PulseBackground {
         Box(Modifier.fillMaxSize().hazeSource(haze)) {
             val surface = state.surface
@@ -122,15 +140,41 @@ fun DiscoverScreen(
             )
         }
         PulseToast(toast)
+        if (suggestions.isNotEmpty()) {
+            SuggestionList(
+                suggestions,
+                onPick = { picked -> text = picked; typing = false; keyboard?.hide(); onSubmit(picked) },
+                modifier = Modifier.align(Alignment.BottomCenter).keyboardSafe().padding(start = 16.dp, end = 16.dp, bottom = 88.dp),
+            )
+        }
         IntentBar(
             haze = haze,
-            initialText = initialText,
+            text = text,
+            onTextChange = { text = it; typing = true },
             listening = listening,
-            onSubmit = onSubmit,
+            onSubmit = { typing = false; onSubmit(it) },
             onMic = onMic,
             onCamera = onCamera,
+            onClear = if (text.isNotEmpty() || state.surface != null) ({ text = ""; typing = false; onClear() }) else null,
             modifier = Modifier.align(Alignment.BottomCenter).keyboardSafe().padding(16.dp),
         )
+    }
+}
+
+/** Autocomplete above the intent bar: past searches, categories and nearby place names. */
+@Composable
+private fun SuggestionList(items: List<String>, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+    val c = Pulse.colors
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.backgroundTop.copy(alpha = 0.96f)).padding(vertical = 6.dp).testTag("suggestions")) {
+        items.forEachIndexed { i, s ->
+            Row(
+                Modifier.fillMaxWidth().clickable { onPick(s) }.testTag("suggestion-$i").padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(PulseIcons.Search, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.textSecondary))
+                BasicText(s, style = PulseType.body.copy(color = c.textPrimary), maxLines = 1, modifier = Modifier.padding(start = 12.dp))
+            }
+        }
     }
 }
 
@@ -163,15 +207,16 @@ fun AiModelChip(state: ModelState, label: String, onDownload: () -> Unit) {
 @Composable
 fun IntentBar(
     haze: HazeState,
-    initialText: String,
+    text: String,
+    onTextChange: (String) -> Unit,
     onSubmit: (String) -> Unit,
     onMic: () -> Unit,
-    onCamera: () -> Unit,
+    onCamera: (() -> Unit)?,
     modifier: Modifier = Modifier,
     listening: Boolean = false,
+    onClear: (() -> Unit)? = null,
 ) {
     val c = Pulse.colors
-    var text by remember(initialText) { mutableStateOf(initialText) }
     val shape = RoundedCornerShape(30.dp)
     Row(
         modifier
@@ -186,15 +231,21 @@ fun IntentBar(
         Spacer(Modifier.width(12.dp))
         PulseTextField(
             value = text,
-            onValueChange = { text = it },
-            placeholder = if (listening) "Listening…" else "Ask for anything nearby…",
+            onValueChange = onTextChange,
+            placeholder = if (listening) "Listening…" else "Search for anything around you…",
             placeholderColor = if (listening) c.accent else null,
             onSubmit = onSubmit,
             modifier = Modifier.weight(1f),
             testTag = "intent-input",
         )
+        if (onClear != null) {
+            NeuButton(PulseIcons.Close, null, onClear, size = 36, description = "Clear search", modifier = Modifier.testTag("clear-search"))
+            Spacer(Modifier.width(8.dp))
+        }
         NeuButton(PulseIcons.Mic, if (listening) "Listening" else null, onMic, size = 42)
-        Spacer(Modifier.width(10.dp))
-        NeuButton(PulseIcons.Camera, null, onCamera, size = 42)
+        if (onCamera != null) {
+            Spacer(Modifier.width(10.dp))
+            NeuButton(PulseIcons.Camera, null, onCamera, size = 42)
+        }
     }
 }

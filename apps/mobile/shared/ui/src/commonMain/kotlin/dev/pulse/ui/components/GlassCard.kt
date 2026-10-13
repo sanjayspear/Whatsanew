@@ -16,7 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,8 +49,10 @@ object GlassCardComponent : PulseComponent {
     @Composable
     override fun Render(node: Node, scope: RenderScope, modifier: Modifier) {
         val r = scope.item ?: return
+        val image = rememberBitmap(remember(r.item.imageKey) { r.item.imageKey?.let(scope.session::image) })
         GlassCard(
             item = r,
+            image = image,
             languageTag = scope.languageTag,
             nowMs = scope.nowMs(),
             onOpen = { scope.signal(Signal(Signal.Kind.TAP, r.item.category, r.item.id, scope.nowMs())) },
@@ -64,6 +70,7 @@ fun GlassCard(
     onOpen: () -> Unit,
     actions: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    image: ImageBitmap? = null,
 ) {
     val t = Pulse.tokens
     val listing = item.item
@@ -75,7 +82,14 @@ fun GlassCard(
             .clickable(onClick = onOpen)
             .padding(12.dp),
     ) {
-        ArtTile(listing.category, listing.id, isNew = Format.isNew(listing, nowMs), modifier = Modifier.width(104.dp).fillMaxHeight())
+        val launch = Format.launchLine(listing, nowMs)
+        if (image != null) {
+            Box(Modifier.width(104.dp).fillMaxHeight().clip(RoundedCornerShape(t.radiusSmall))) {
+                Image(image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            }
+        } else {
+            ArtTile(listing.category, listing.id, isNew = launch != null, modifier = Modifier.width(104.dp).fillMaxHeight())
+        }
         Column(Modifier.padding(start = 14.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 BasicText(
@@ -83,8 +97,12 @@ fun GlassCard(
                     style = PulseType.overline.copy(color = t.colors.accent),
                 )
                 BasicText(listing.title(languageTag), style = PulseType.cardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-                listing.taglineFor(languageTag)?.let {
-                    BasicText(it, style = PulseType.body, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+                if (launch != null) {
+                    // Distinguishes newly launched content from long-established listings.
+                    BasicText(launch, style = PulseType.label.copy(color = t.colors.accent2), maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                }
+                (listing.taglineFor(languageTag) ?: listing.address)?.let {
+                    BasicText(it, style = PulseType.body, maxLines = if (launch != null) 1 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
                 }
             }
             BasicText(

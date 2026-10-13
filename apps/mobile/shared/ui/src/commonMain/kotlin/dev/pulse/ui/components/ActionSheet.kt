@@ -120,13 +120,14 @@ private fun descriptionFor(kind: ActionKind, active: Boolean) = when (kind) {
     ActionKind.SHARE -> "Share"
     ActionKind.CALL -> "Call"
     ActionKind.NAVIGATE -> "Directions"
+    ActionKind.BOOK -> "Book Now"
     else -> null
 }
 
 private fun labelFor(kind: ActionKind) = when (kind) {
     ActionKind.CALL -> "Call"
     ActionKind.NAVIGATE -> "Go"
-    ActionKind.BOOK -> "Book"
+    ActionKind.BOOK -> "Book Now"
     ActionKind.SAVE -> "Save"
     ActionKind.SHARE -> "Share"
     ActionKind.PLAY_VIDEO -> "Play"

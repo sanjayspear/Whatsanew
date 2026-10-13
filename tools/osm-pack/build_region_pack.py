@@ -14,6 +14,7 @@ kept. Data (c) OpenStreetMap contributors, ODbL: the pack carries that attributi
 """
 import argparse
 import json
+import re
 import sys
 import tempfile
 
@@ -25,25 +26,39 @@ RELEVANT = {
     "amenity": {"cafe", "restaurant", "fast_food", "food_court", "ice_cream", "bar", "pub", "biergarten", "marketplace",
                 "theatre", "cinema", "arts_centre", "music_venue", "nightclub", "events_venue", "community_centre",
                 "conference_centre", "exhibition_centre", "pharmacy", "hospital", "clinic", "atm", "bank", "fuel",
-                "charging_station"},
+                "charging_station", "place_of_worship", "police", "post_office", "school", "college", "university",
+                "library", "bus_station", "townhall", "courthouse"},
     "shop": {"bakery", "confectionery", "pastry", "clothes", "boutique", "fashion", "fashion_accessories", "shoes",
              "tailor", "jewelry", "bag", "fabric", "mall", "department_store", "books", "stationery", "electronics",
-             "mobile_phone", "computer", "supermarket", "gift", "variety_store", "sports", "toys"},
+             "mobile_phone", "computer", "supermarket", "gift", "variety_store", "sports", "toys", "hairdresser", "beauty",
+             "massage", "cosmetics", "beverages", "juice", "convenience", "greengrocer", "optician", "laundry",
+             "dry_cleaning", "car_repair", "motorcycle_repair", "hardware", "furniture", "pet"},
     "tourism": {"hotel", "guest_house", "hostel", "motel", "apartment", "camp_site", "attraction", "viewpoint",
                 "artwork", "museum", "gallery"},
-    "leisure": {"fitness_centre", "sports_centre", "fitness_station", "park", "garden", "swimming_pool"},
+    "leisure": {"fitness_centre", "sports_centre", "fitness_station", "park", "garden", "swimming_pool", "stadium"},
     "sport": {"yoga"},
     "water": {"lake", "reservoir", "pond"},
 }
 KEEP_TAGS = set(RELEVANT) | {"name", "name:en", "name:kn", "name:hi", "cuisine", "phone", "contact:phone", "website",
                              "contact:website", "addr:street", "addr:suburb", "addr:city", "addr:state", "stars",
-                             "clothes", "description"}
+                             "clothes", "description", "religion", "denomination", "opening_hours", "landuse", "office", "brand",
+                             "operator"}
+
+# IT / tech parks have no dedicated tag in OSM: they are commercial land or office campuses with a telling
+# name. Kept in step with the `business.it_park` pattern in OsmCategories.kt.
+TECH_PARK_NAME = re.compile(r"[Tt]ech ?[Pp]ark|IT [Pp]ark|[Ss]oftware [Pp]ark|[Tt]echnology [Pp]ark|[Bb]usiness [Pp]ark|[Tt]ech [Cc]ampus|SEZ|[Tt]echzone|[Tt]ech [Hh]ub")
+TECH_PARK_KEYS = {"landuse": {"commercial", "industrial"}, "office": {"it", "company"}, "building": {"commercial", "office"}}
 
 
 def relevant(tags) -> bool:
     if "name" not in tags:
         return False
-    return any(tags.get(k) in vals for k, vals in RELEVANT.items())
+    if any(tags.get(k) in vals for k, vals in RELEVANT.items()):
+        return True
+    # Every named office (companies, banks' offices, government, NGOs): people search them by name.
+    if "office" in tags and tags["office"] not in ("no", "vacant"):
+        return True
+    return any(tags.get(k) in vals for k, vals in TECH_PARK_KEYS.items()) and bool(TECH_PARK_NAME.search(tags["name"]))
 
 
 class Collector(osmium.SimpleHandler):
@@ -57,6 +72,9 @@ class Collector(osmium.SimpleHandler):
 
     def emit(self, kind, obj, lat, lon):
         tags = {t.k: t.v for t in obj.tags if t.k in KEEP_TAGS}
+        if (obj.tags.get("building") in TECH_PARK_KEYS["building"] and not any(k in tags for k in ("landuse", "office"))
+                and TECH_PARK_NAME.search(tags.get("name", ""))):
+            tags["landuse"] = "commercial"  # an office campus building: classify like commercial land
         self.out.append({
             "type": kind, "id": obj.id, "lat": round(lat, 6), "lon": round(lon, 6),
             "version": obj.version, "timestamp": obj.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"), "tags": tags,

@@ -29,8 +29,15 @@ object FrameMerge {
             }
         }
         val merged = (r ?: l.copy(near = null)).copy(
-            categories = r?.categories?.ifEmpty { null } ?: l.categories,
-            text = r?.text ?: l.text,
+            categories = r?.categories?.ifEmpty { null }
+                // A name search stays a name search: the model may not turn "microsoft" into cafés.
+                ?: if (r?.text != null && dev.pulse.core.data.NameIndex.knows(r.text!!)) emptyList() else l.categories,
+            text = when {
+                r?.text == null -> l.text
+                // Dish words ("dosa") are firm; other leftovers beside a category are only a name hint.
+                r.categories.isNotEmpty() && Lexicon.categories.none { it.second.text == r.text } -> l.text ?: r.text
+                else -> r.text
+            },
             near = r?.near ?: llmNear,
             time = r?.time ?: l.time,
             freshness = r?.freshness ?: l.freshness,

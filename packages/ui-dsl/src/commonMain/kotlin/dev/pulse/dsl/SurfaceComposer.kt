@@ -146,9 +146,15 @@ class SurfaceComposer(private val newSurfaceId: () -> String) {
                     "results", "list.cards", role = Roles.RESULTS,
                     bind = Binding(
                         query,
-                        RankSpec(if (eventLike) RankStrategy.SOONEST else RankStrategy.PERSONAL),
+                        RankSpec(
+                            when {
+                                query.freshness == Freshness.NEW -> RankStrategy.NEWEST
+                                eventLike -> RankStrategy.SOONEST
+                                else -> RankStrategy.PERSONAL
+                            },
+                        ),
                         limit = 20,
-                        template = cardTemplate(eventLike),
+                        template = cardTemplate(),
                     ),
                 ),
             )
@@ -173,11 +179,13 @@ class SurfaceComposer(private val newSurfaceId: () -> String) {
         return Node(ROOT_ID, "layout.stack", role = Roles.ROOT, children = picker + ordered)
     }
 
-    private fun cardTemplate(eventLike: Boolean) = Node(
+    private fun cardTemplate() = Node(
         id = TEMPLATE_CARD,
         component = "glass.card",
         actions = buildList {
-            if (eventLike) add(ActionSpec(ActionKind.BOOK, mapOf("listingId" to "\$item.id")))
+            // Shown only for listings with a real booking destination: `$item.bookable` resolves to
+            // null otherwise, and the renderer drops actions whose item arguments are missing.
+            add(ActionSpec(ActionKind.BOOK, mapOf("listingId" to "\$item.id", "bookable" to "\$item.bookable")))
             add(ActionSpec(ActionKind.NAVIGATE, mapOf("lat" to "\$item.lat", "lng" to "\$item.lng")))
             add(ActionSpec(ActionKind.CALL, mapOf("phone" to "\$item.phone")))
             add(ActionSpec(ActionKind.SAVE, mapOf("listingId" to "\$item.id")))

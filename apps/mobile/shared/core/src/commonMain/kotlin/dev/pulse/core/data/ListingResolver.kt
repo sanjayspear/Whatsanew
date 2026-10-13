@@ -20,6 +20,15 @@ fun interface ListingSource {
 
     /** Listings around a point. Large stores override this with an indexed spatial query. */
     fun near(center: GeoCoordinate, radiusMeters: Int): List<ListingItem> = all()
+
+    /**
+     * The [max] nearest listings within the radius whose (category, [ListingItem.searchText]) pass
+     * [keep]. Large stores filter before loading full rows, so dense cities are never truncated.
+     */
+    fun nearMatching(center: GeoCoordinate, radiusMeters: Int, max: Int, keep: (category: String, searchText: String) -> Boolean): List<ListingItem> =
+        near(center, radiusMeters).filter { keep(it.category, it.searchText()) }
+            .sortedBy { haversineMeters(center.lat, center.lng, it.lat, it.lng) }
+            .take(max)
 }
 
 /**
@@ -38,20 +47,22 @@ class ListingResolver(
     private val geocoded: (String) -> GeoCoordinate? = { null },
 ) {
     /**
-     * Like [resolve], but never a dead end: if fewer than [minResults] places are within the radius,
-     * widen it (x2.5, up to [maxRadiusMeters]) and say so. Sparse areas still get the nearest options.
+     * Exactly the radius the user asked for, never silently wider. When it comes back thin, the UI
+     * offers to widen or to pick another area (the user decides).
      */
-    fun resolveWidening(binding: Binding, minResults: Int = 3, maxRadiusMeters: Int = 10_000): Resolution {
-        val requested = binding.query.near?.radiusMeters ?: GeoFilter.DEFAULT_RADIUS_METERS
-        var radius = requested
-        var items = resolve(binding)
-        val withinRequested = items.size
-        while (items.size < minResults && radius < maxRadiusMeters && binding.query.near != null) {
-            radius = (radius * 5 / 2).coerceAtMost(maxRadiusMeters)
-            val wider = binding.copy(query = binding.query.copy(near = binding.query.near!!.copy(radiusMeters = radius)))
-            items = resolve(wider)
-        }
-        return Resolution(items, requestedRadiusMeters = requested, radiusMeters = radius, withinRequested = withinRequested)
+    fun resolveWithin(binding: Binding): Resolution {
+        val radius = binding.query.near?.radiusMeters ?: GeoFilter.DEFAULT_RADIUS_METERS
+        return Resolution(resolve(binding), requestedRadiusMeters = radius, radiusMeters = radius)
+    }
+
+    /**
+     * The closest match *outside* the requested radius (up to [maxMeters]), so a thin result can say
+     * "the nearest Microsoft is 9 km away" instead of nothing. Nothing is shown until the user asks.
+     */
+    fun nearestBeyond(binding: Binding, maxMeters: Int = 60_000): ResolvedItem? {
+        val near = binding.query.near ?: return null
+        val wide = binding.copy(query = binding.query.copy(near = near.copy(radiusMeters = maxMeters)), limit = Int.MAX_VALUE)
+        return resolve(wide).filter { it.distanceMeters > near.radiusMeters }.minByOrNull { it.distanceMeters }
     }
 
     fun resolve(binding: Binding): List<ResolvedItem> {
@@ -61,12 +72,13 @@ class ListingResolver(
         val now = nowMs()
         val text = q.text?.lowercase()
 
-        val candidates = source.near(anchor, radius).asSequence()
+        val inCategory: (String) -> Boolean = { cat -> q.categories.isEmpty() || q.categories.any { c -> cat == c || cat.startsWith("$c.") } }
+        // Text is a hard filter only when there is no category; otherwise it boosts ranking.
+        val candidates = source.nearMatching(anchor, radius, CANDIDATES) { cat, searchText ->
+            inCategory(cat) && (text == null || q.categories.isNotEmpty() || NameMatch.score(searchText, text) > 0 || cat.contains(text))
+        }.asSequence()
             .map { ResolvedItem(it, haversineMeters(anchor.lat, anchor.lng, it.lat, it.lng)) }
             .filter { it.distanceMeters <= radius }
-            .filter { r -> q.categories.isEmpty() || q.categories.any { c -> r.item.category == c || r.item.category.startsWith("$c.") } }
-            // Text is a hard filter only when there is no category; otherwise it boosts ranking.
-            .filter { r -> text == null || q.categories.isNotEmpty() || r.matchesText(text) }
             .filter { r -> q.time == null || r.item.startsAtEpochMs == null || overlaps(r.item, TimeWindows.resolve(q.time!!, now, r.item.timeZone)) }
             .filter { r -> r.item.endsAtEpochMs == null || r.item.endsAtEpochMs!! >= now }
             .filter { r ->
@@ -80,17 +92,22 @@ class ListingResolver(
             .filter { r -> q.openNow != true || isOpen(r.item, now) }
             .toList()
 
+        // A specific name ("Bagmane Tech Park", "PVR Orion") beats every ranking signal.
+        val nameRank: (ResolvedItem) -> Int = { r -> if (text == null) 0 else r.nameMatch(text) }
         val ranked = when (binding.rank.strategy) {
             RankStrategy.PERSONAL -> candidates
-                .map { it.copy(score = ranker.score(it, radius, now) + if (text != null && it.matchesText(text)) 0.25 else 0.0) }
+                .map { it.copy(score = ranker.score(it, radius, now) + if (text != null && NameMatch.score(it.item.searchText(), text) > 0) 0.25 else 0.0) }
                 .sortedByDescending { it.score }
             RankStrategy.DISTANCE -> candidates.sortedBy { it.distanceMeters }
             RankStrategy.SOONEST -> candidates.sortedWith(compareBy(nullsLast()) { it.item.startsAtEpochMs })
             RankStrategy.NEWEST -> candidates.sortedByDescending { it.item.firstListedAtEpochMs }
             RankStrategy.POPULAR -> candidates.sortedByDescending { it.item.rating ?: 0f }
         }
-        return ranked.take(binding.limit)
+        return (if (text == null) ranked else ranked.sortedByDescending(nameRank)).take(binding.limit)
     }
+
+    /** Best [NameMatch] score over the listing's names (0 = not a name match). */
+    private fun ResolvedItem.nameMatch(text: String): Int = item.titles.values.maxOf { NameMatch.score(it, text) }
 
     fun anchorOf(anchor: GeoAnchor?): GeoCoordinate = when (anchor) {
         is GeoAnchor.Point -> GeoCoordinate(anchor.lat, anchor.lng)
@@ -99,11 +116,6 @@ class ListingResolver(
             ?: location.lastKnown()
         GeoAnchor.Here, null -> location.lastKnown()
     }
-
-    private fun ResolvedItem.matchesText(text: String): Boolean =
-        item.titles.values.any { it.lowercase().contains(text) } ||
-            item.tagline.values.any { it.lowercase().contains(text) } ||
-            item.category.contains(text)
 
     private fun overlaps(item: ListingItem, range: EpochRange?): Boolean {
         if (range == null) return true
@@ -122,6 +134,9 @@ class ListingResolver(
 
     private companion object {
         const val NEWNESS_WINDOW_MS = 90L * 24 * 60 * 60_000
+
+        /** Nearest matches considered per query (ranking then picks the best [Binding.limit]). */
+        const val CANDIDATES = 1_500
     }
 }
 

@@ -3,8 +3,43 @@
 **Read this before changing code.** `SESSION-LOG.md` records what was asked and decided; this file
 records what changed in the code, why, how the pieces connect, and what's fragile. Newest first.
 
-Baseline: commit `b672faf` on `main` (session 1, 2026-10-11: the original scaffold). Everything
-below is session 2 (2026-10-12), committed and pushed as `27a4319`.
+Baseline: commit `b672faf` on `main` (session 1, 2026-10-11: the original scaffold). Session 2
+(2026-10-12) was committed and pushed as `27a4319`. Session 3 (2026-10-14, "Search Around") is
+below it and **not committed yet**.
+
+---
+
+## Session 3: "Search Around" requirements (2026-10-14)
+
+Source: `~/Documents/whatsNew_Req/Search_Around_Functional_Requirements.pdf`. Scope: everything that
+runs on the phone; server-side items are listed in SESSION-LOG.md. APK `dist/pulse-0.4.0.apk`
+(versionCode 4, versionName 0.4.0, release-signed), verified on the Pixel 8a.
+
+| Area | Files | Notes |
+|---|---|---|
+| Default radius 6 km | `dsl/Query.kt` (`DEFAULT_RADIUS_METERS = 6_000`), `core/data/SearchDefaults.kt`, `RuleBasedIntentParser`, `IntentPipeline.apply` | `SearchDefaults.radiusMeters` is process-wide, written only by `AppSettingsStore`. The pipeline fills `near = Here(default)` for DISCOVER frames without a place. |
+| No silent widening | `ListingResolver.resolveWithin` (replaces `resolveWidening`), `ListCardsComponent.ExpandPrompt` | Fewer than 3 results shows "Only N within X. Search further or try another area?" with wider-radius chips and an area field. |
+| Category accuracy | `ai/Lexicon.kt`, `data/osm/OsmCategories.kt`, `tools/osm-pack/build_region_pack.py`, `RegionPacks.PACK_VERSION = 2` | New keys: `worship.*` (from `religion=`), `beauty.*`, `food.juice` (cuisine or name), `food.ice_cream`, `business.it_park` (commercial land / office campus with a tech-park name; regex kept in sync between Kotlin and Python), `shopping.grocery/furniture/hardware/pet`, `health.optician`, `education.*`, `sports.stadium`, `services.police/post/bus/laundry/repair`. Phrases contained in a longer hit are dropped ("IT park" ≠ park). Pack rebuilt: 28,236 places; existing installs reload once (version stored in kv). |
+| Typos | `RuleBasedIntentParser.correctSpelling`, `editDistance` | 5+ letters, 1 edit (2 for 8+), same first letter, `REAL_WORDS` guard ("shows" ≠ shoes). |
+| Exact names | `ListingResolver.nameMatch` | exact > prefix > all words; applied after ranking. |
+| Clarifying questions | `ai/Clarifier.kt`, `IntentPipeline.showClarification`, `ClarifyComponent` (`intent.clarify`) | A validated DSL surface with one question node; each option is a clear utterance. |
+| Booking | `core/data/booking/BookingDestinations.kt`, `ListingItem.field("bookable")`, `SurfaceComposer.cardTemplate`, `BookingOptionsComponent`, `PulseGraph.dispatch(BOOK)` | Card template always carries BOOK with `$item.bookable`; the action sheet hides it when that resolves to null. Links: BookMyShow `explore/{movies,plays,events}-bengaluru` (verified in the BMS app on the Pixel), District `/{movies,events}/` (HTTP 200), venue / organiser https links. `isSafeLink` = https + host only. Android `<queries>` for `com.bt.bms` only to say "opens in the app". |
+| Profile and onboarding | `prefs/UserProfile.kt`, `ProfileEditorComponent` (`profile.editor`), `AppSurfaces.onboarding/profile` | Gate: role **and** profile required. Photo via Android system photo picker (no permission), downscaled to 512 px JPEG, base64 in kv. iOS picker not wired (`photoPicker` null hides the button). |
+| Menu and pages | `screens/MenuDrawer.kt`, `screens/SurfaceHost.kt` (`AppSurfaces.*`), `components/AccountPages.kt` (`page.header`, `history.list`, `settings.panel`, `info.page`) | `Screen` enum + back stack in `PulseApp`. Pages are DSL surfaces and must be shown with `.copy(theme = state.theme)`. |
+| Merchant | `core/data/MerchantPosts.kt`, `components/MerchantComponents.kt` | Validation + moderation on-device; posts upserted into the listing cache (region `MERCHANT`) and restored on start (cache eviction). |
+| History, settings | `prefs/SearchHistory.kt`, `prefs/AppSettings.kt`, `prefs/KeyValueStore.kt` | All in the existing `kv` table: **no schema migration** (only new queries in `Pulse.sq`: `deleteValue`, `deleteValuesWithPrefix`, `clearSavedListings`, `deleteListing`). |
+| Search bar | `DiscoverScreen` | Clear (X) resets the surface, not history. Autocomplete (`ai/SearchSuggestions.kt`, debounced, off the main thread). Camera button hidden (`onCamera = null`). Engineering overlay off by default (`showDiagnostics`). |
+| Keyboard | `LayoutStackComponent` (list padded by `WindowInsets.ime`), `PulseTextField` (bring-into-view on focus), `SurfaceHost` (tap outside clears focus) | Found on the Pixel. |
+| Theme | Settings → Appearance / text size / reduce motion apply a `ThemePatch` through the pipeline (persisted). `PulseApp(onDarkThemeChanged)` → Android status-bar icon colour. |
+| Rename | `strings.xml`, `iosApp/project.yml` (`CFBundleDisplayName`), desktop title, share text | Package / bundle id stay `dev.pulse.app`. Internal names still "Pulse". |
+
+| Company / name search (later in session 3) | `tools/osm-pack` (all named `office=*`, keeps `brand`/`operator`), `OsmCategories` (`business.office`, `OFFICE_VALUES` declared **before** `mapping`), `data/NameMatch.kt`, `data/NameIndex.kt` + `FrameMerge`, `data/osm/PhotonClient.kt` + `NearbySync(names =)`, `ListingResolver.nearestBeyond`, `RegionPacks.PACK_VERSION = 3` | Pack 31,310 places (3,110 offices). Leftover words beside a category are a soft name hint ("microsoft office"); the model may replace them but not dish words. Photon is called once per (name, ~10 km area, 6 h). |
+| **DB migration 2** | `Pulse.sq` (`listing_cache.search_text`), `2.sqm`, `SqlListingCache.nearMatching / searchTextsNear / backfillSearchText`, `ListingSource.nearMatching` | Schema version **3**. Searches filter category + name on light columns, then load JSON for the nearest 1,500 matches: the old 5,000-row truncation is gone. Rows from older installs are backfilled at start. Tests: `SchemaMigrationTest` (v2 rows, dense area). |
+| Landing type | `GeometricRotatingButton` (label `PulseType.title`), `LandingScreen` (tagline 0.82 × display) | User feedback: door text too big. |
+
+**DSL:** no schema change. Only the default radius constant and the composer's card template / NEW ranking changed (outputs, not types).
+
+**Tests:** `SearchAroundRequirementsTest` (23, core) and 10 new UI tests in `UserVisibleBehaviourTest`.
 
 ---
 
@@ -202,14 +237,17 @@ need a migration file. Fixed with `shared/core/src/commonMain/sqldelight/dev/pul
 
 ## Known issues / tech debt
 
-- Header chip shows the **requested** radius (≤ 2 km) when results widened; the note explains it.
+- ~~Header chip vs widened radius~~ gone in session 3 (no automatic widening).
 - OSM cards often lack ratings, hours, photos and phones (only Go/Save/Share).
 - Events have **no dates** (venues only); needs merchant posting or partner feeds.
 - Qwen copies few-shots; contained by `FrameMerge`, not fixed (better few-shots or a LoRA fine-tune).
 - Gemini Nano rung is a stub. iOS app never built or run. In-app model download never run on a device (the model was side-loaded).
 - Live Overpass is rate-limited / overloaded at times; fine only as a fallback outside packs.
-- `SqlListingCache` caps queries at 5,000 rows per bbox.
-- "Book" still produces an unhandled `pulse://book/<id>` (only shown for event listings; needs a booking flow).
+- ~~`SqlListingCache` caps queries at 5,000 rows per bbox~~ fixed in session 3 (`nearMatching`, migration 2).
+- Name search coverage = OpenStreetMap coverage (volunteer-mapped); Google-level coverage would need a paid Places API (not open source).
+- ~~"Book" unhandled~~ fixed in session 3 (booking page).
+- Booking links are platform city pages, not per-show deep links (no verified per-show URLs without a partner feed).
+- iOS: photo picker not wired; `locationPermitted` / status-bar hooks use defaults.
 - Gradle **configuration cache can go stale** after building different included builds back to back
   (`BuildFusService` error). Fix: re-run with `--no-configuration-cache`.
 

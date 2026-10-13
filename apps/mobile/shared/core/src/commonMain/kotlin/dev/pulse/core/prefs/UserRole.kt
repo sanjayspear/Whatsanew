@@ -14,6 +14,8 @@ enum class UserRole { REGULAR, MERCHANT }
 interface UserRoleRepository {
     val role: StateFlow<UserRole?>
     fun setRole(role: UserRole)
+    /** Sign out: forget the choice so first-launch setup runs again. */
+    fun clear()
 }
 
 /**
@@ -29,6 +31,11 @@ class SqlUserRoleRepository(private val db: PulseDatabase) : UserRoleRepository 
         _role.value = role
     }
 
+    override fun clear() {
+        db.pulseQueries.deleteValue(KEY)
+        _role.value = null
+    }
+
     private fun read(): UserRole? = db.pulseQueries.getValue(KEY).executeAsOneOrNull()
         ?.let { stored -> UserRole.entries.firstOrNull { it.name == stored } }
 
@@ -41,4 +48,5 @@ class InMemoryUserRoleRepository(initial: UserRole? = null) : UserRoleRepository
     private val _role = MutableStateFlow(initial)
     override val role: StateFlow<UserRole?> = _role.asStateFlow()
     override fun setRole(role: UserRole) { _role.value = role }
+    override fun clear() { _role.value = null }
 }

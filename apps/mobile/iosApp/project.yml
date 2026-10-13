@@ -17,6 +17,7 @@ targets:
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Understands your voice on-device."
         INFOPLIST_KEY_NSCameraUsageDescription: "Point at something to find it nearby."
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Shows places and events near where you are."
+        INFOPLIST_KEY_CFBundleDisplayName: "Search Around"
         GENERATE_INFOPLIST_FILE: YES
         FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../shared/ui/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
         OTHER_LDFLAGS: ["-framework", "PulseKit", "-lsqlite3"]

@@ -19,8 +19,8 @@ android {
         applicationId = "dev.pulse.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 5
+        versionName = "0.4.1"
         // arm64 covers effectively every phone in the market; dropping x86/armv7 saves ~80 MB of
         // MediaPipe native code. Play Store builds use App Bundles, which split per ABI anyway.
         ndk { abiFilters += listOf("arm64-v8a") }

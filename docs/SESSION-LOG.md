@@ -1,5 +1,53 @@
 # Pulse: session log
 
+## Session 3, Wednesday 2026-10-14
+
+| # | You asked | What happened |
+|---|---|---|
+| 1 | "What's this project about?" | Summarised Pulse from the README, docs and memory. |
+| 2 | Implement `~/Documents/whatsNew_Req/Search_Around_Functional_Requirements.pdf` (7 pages) | Asked three scoping questions; you declined them. |
+| 3 | "Do what is possible now" + "test on the connected Android device" | Built everything that runs on the phone (below); deferred what needs a server. **Tested on the Pixel 8a**; 8 device-only bugs found and fixed. APK: `dist/pulse-0.4.0.apk`. |
+
+### Done (on-device)
+- **Rebrand:** app name "Search Around" (package id unchanged, so updates install over Pulse). Home: tagline "One Search. Endless Possibilities.", doors **Search Around** (search existing) and **Search Recently Launched** (new launches).
+- **Search:** default radius **6 km** (Settings: 2–25 km); **never widens silently**: "Only N within 6 km. Search further or try another area?" with buttons and an area field.
+- **Accuracy:** temples, churches, mosques, gurudwaras, Jain and Buddhist temples, salons, spas, juice shops, IT parks, groceries, schools, colleges, police, post offices and more. A temple search returns temples, never "Temple Meals" (type comes from OSM tags, not names). Typos ("temle", "resturant", "chruch") are corrected conservatively. Exact names rank first. Rebuilt offline pack: **28,236 places** (989 temples, 240 churches, 144 mosques, 79 IT parks).
+- **Clarifying questions** for ambiguous requests ("hotels": stay or eat? "shops": what kind?).
+- **Clear search** (X in the search bar), separate from clearing history. **Autocomplete** (history, categories, real nearby names).
+- **Book Now** only when a real destination exists (cinemas, plays, concerts, comedy, events, or a merchant's link). A booking page lists **BookMyShow** and **District by Zomato** (Paytm Insider redirects to District) plus the venue or organiser's site; it keeps what you searched. Verified on the Pixel: BookMyShow's **installed app opened** at Now Showing (Bengaluru); plays and events pages valid.
+- **Account setup** on first launch (name required; avatar or photo; optional phone, stored unverified; User or Merchant). **Profile**, **Sign out**, **Delete my data**.
+- **Hamburger menu:** Profile, Search Around, Search Recently Launched, Search History, Saved Items, (merchant: Publish an offering, My posts), Settings, Help and Support, About, Privacy Policy and Terms, Sign Out.
+- **Merchant publishing** with on-device validation and moderation (required fields, https-only links, dates, duplicates, blocked phrases). Posts appear in search and in Recently Launched on that phone.
+- **Settings** (only what works): location / chosen area, default radius, Light / Dark / Black / Warm, text size, reduce motion, history on/off, account, version. **About**, **Help** (FAQ + report a problem via share sheet), **Privacy and Terms** (plain-language draft).
+- Cards show "Launched 14 Oct" / "New · added 6 Oct"; sort chips Best match / Nearest / Newest.
+
+### Found on the Pixel and fixed
+1. Keyboard covered form fields on the setup page (list now shrinks with the keyboard).
+2. Light theme: app pages kept dark text on a light background (pages now use the app theme).
+3. Light theme: white status-bar icons were unreadable (now follow the theme).
+4. "movies in nearby cinemas" read "Nearby Cinema" as a place (and would have geocoded it).
+5. "nearest IT park" woke the on-device AI for nothing ("nearest" unknown).
+6. Merchant event time showed 1:30 PM instead of 7 PM (time zone applied twice).
+7. Picking a suggestion left the keyboard open; tapping outside a field didn't close it.
+8. Widening a search replaced the query in the bar with just "within 6 km".
+
+Also removed from the product UI: the engineering overlay ("AI: unparseable…"), and the camera button (visual search isn't built yet).
+
+### Needs a server or your decision (not built)
+- **Phone verification (OTP)**: needs an SMS provider (cost) and an auth service.
+- **Merchant posts visible to everyone, merchant verification, moderation queue, reports**: needs merchant-service hosted (hosting decision still open).
+- **Push notifications** for new launches: needs FCM/APNs + a server.
+- **Movie / show listings with dates** ("latest movie releases"): needs a licensed data feed; today the app finds cinemas and hands off to BookMyShow / District.
+- **Platform logos:** the booking page shows names with colour badges; real logos need the platforms' brand permission.
+- **Languages** (Kannada / Hindi): Settings shows only what exists, so no language switch yet.
+- Privacy Policy / Terms text is a plain-language **draft for legal review**.
+- Untested: picking an actual photo (the picker opens and cancels fine; I didn't select your personal photos); iOS app (no Xcode).
+
+| 4 | "Search by company name doesn't work (Microsoft, Wells Fargo…). Google finds them; users should search whatever they want." | Root causes: (a) the pack builder dropped **offices** (OSM has Microsoft ×7, Wells Fargo ×2, Accenture ×15, IBM ×17… as `office=company/it`); (b) names matched only exactly (no "wellsfargo", no typos); (c) the on-device model turned "microsoft" into cafés; (d) **the cache returned an arbitrary 5,000 rows per area**, so in dense Bengaluru places could silently go missing. Fixes: pack now includes all 3,110 named offices (31,310 places); `NameMatch` (spacing/case/punctuation-insensitive, per-word typo tolerance); name searches stay name searches (`NameIndex` in `FrameMerge`); **`search_text` column + migration 2** so searches filter by category/name before loading rows (no cap); **online name search via Photon** (OpenStreetMap-based, free) for names not on the phone; "The nearest, Wells Fargo, is 17.9 km away · Show results within 25 km". Verified on the Pixel: microsoft (Microsoft Lab 4.1 km, R&D 10.6 km, Microsoft India 13.8 km), wellsfargo, mirosoft. Note: Google shows more because Google Maps is a paid, proprietary database; OpenStreetMap coverage is what's mapped by volunteers. |
+| 5 | "Search Around / Search Recently Launched text on the landing page is too big" | Door labels now use the 22 sp title style (were 34 sp display); tagline 28 sp. |
+
+APK: `dist/pulse-0.4.1.apk` (versionCode 5). Tests at end of session 3: DSL 34, mobile core 90, Compose UI 17, all passing; iOS shared code compiles.
+
 ## Session 2, Monday 2026-10-12
 
 | # | You asked | What happened |

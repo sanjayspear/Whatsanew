@@ -1,6 +1,7 @@
-# Pulse
+# Search Around (codename Pulse)
 
-An AI-first, intent-driven discovery app for "what's happening around me". Kotlin Multiplatform
+**One Search. Endless Possibilities.** An AI-first, intent-driven discovery app: temples to tech parks,
+salons to shows, new launches near you, with Book Now hand-off to BookMyShow / District. Kotlin Multiplatform
 (Android + iOS), Compose Multiplatform, on-device AI, Spring Boot microservices and a Python AI server.
 
 Every screen after the landing page is **generated from user intent**: utterance → on-device
@@ -42,6 +43,6 @@ iOS: `brew install xcodegen && cd apps/mobile/iosApp && xcodegen && open iosApp.
 | catalog-service (hexagonal, PostGIS, outbox → Kafka, OpenAPI) | Done, 31 tests + 2 Docker ITs |
 | 7 other services | Skeletons: domain cores, 12 tests + 8 planned IT placeholders |
 | AI server: frames, re-rank, eval gate, distillation plan | Done, 6 tests |
-| Android app | **Built and smoke-tested** on a Pixel 7 emulator (API 35): launch, What's New, typed intents |
+| Android app | **Search Around 0.4.1** (`dist/pulse-0.4.1.apk`), tested on a Pixel 8a: search, booking hand-off, onboarding, menu, merchant posts, settings |
 | iOS app | Shared code compiles for iOS; app not built yet (needs Xcode) |
 | Gemini Nano rung, MapLibre tiles, inline video, camera vision | Integration points, P1-P3 |

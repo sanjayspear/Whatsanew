@@ -31,6 +31,17 @@ internal object Format {
         "gems.park" to "Parks", "gems.lake" to "Lakes", "shopping.mall" to "Malls", "shopping.electronics" to "Electronics",
         "health.pharmacy" to "Pharmacies", "health.hospital" to "Hospitals & clinics", "services.atm" to "ATMs & banks",
         "services.fuel" to "Fuel & charging", "food.bakery" to "Bakeries", "fitness.gym" to "Gyms",
+        "worship" to "Places of worship", "worship.temple" to "Temples", "worship.church" to "Churches",
+        "worship.mosque" to "Mosques", "worship.gurudwara" to "Gurudwaras", "worship.jain" to "Jain temples",
+        "worship.buddhist" to "Buddhist temples", "beauty" to "Beauty", "beauty.salon" to "Salons",
+        "beauty.spa" to "Spas & massage", "beauty.cosmetics" to "Cosmetics", "food.juice" to "Juice shops",
+        "food.ice_cream" to "Ice cream", "business.it_park" to "IT parks", "shopping.grocery" to "Groceries",
+        "shopping.furniture" to "Furniture", "shopping.hardware" to "Hardware", "shopping.pet" to "Pet shops",
+        "health.optician" to "Opticians", "education.school" to "Schools", "education.college" to "Colleges",
+        "education.library" to "Libraries", "sports.stadium" to "Stadiums", "services.police" to "Police",
+        "services.post" to "Post offices", "services.bus" to "Bus stations", "services.laundry" to "Laundry",
+        "services.repair" to "Vehicle repair", "services" to "Services",
+        "business.office" to "Offices & companies", "places" to "Places",
     )
     private val kannada = mapOf("food.cafe" to "ಕೆಫೆಗಳು", "arts.theatre" to "ರಂಗಭೂಮಿ")
 
@@ -46,10 +57,10 @@ internal object Format {
             q.categories.isNotEmpty() -> q.categories.take(2).joinToString(" & ") { category(it, lang) } +
                 if (q.categories.size > 2) " & more" else ""
             q.text != null -> "“${q.text}”"
-            else -> "Around you"
+            else -> "Everything around you"
         }
         return when (q.freshness) {
-            Freshness.NEW -> if (q.categories.isEmpty() && q.text == null) "New around you" else "New ${what.lowercase()}"
+            Freshness.NEW -> if (q.categories.isEmpty() && q.text == null) "Recently launched" else "New ${what.lowercase()}"
             Freshness.TRENDING -> "Trending ${what.lowercase()}"
             null -> what
         }
@@ -114,4 +125,38 @@ internal object Format {
     }
 
     fun isNew(item: ListingItem, nowMs: Long) = nowMs - item.firstListedAtEpochMs < 90L * 24 * 60 * 60_000
+
+    private val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+    /** "14 Oct" (adds the year when it isn't this year). */
+    fun date(epochMs: Long, nowMs: Long, zone: String = "Asia/Kolkata"): String {
+        val tz = TimeZone.of(zone)
+        val d = Instant.fromEpochMilliseconds(epochMs).toLocalDateTime(tz)
+        val thisYear = Instant.fromEpochMilliseconds(nowMs).toLocalDateTime(tz).year
+        return "${d.day} ${months[d.month.ordinal]}" + if (d.year != thisYear) " ${d.year}" else ""
+    }
+
+    /** "just now", "5 min ago", "3 h ago", "2 days ago", then a date. */
+    fun ago(epochMs: Long, nowMs: Long): String {
+        val min = (nowMs - epochMs) / 60_000
+        return when {
+            min < 1 -> "just now"
+            min < 60 -> "$min min ago"
+            min < 24 * 60 -> "${min / 60} h ago"
+            min < 7 * 24 * 60 -> "${min / (24 * 60)} days ago".replace("1 days", "1 day")
+            else -> date(epochMs, nowMs)
+        }
+    }
+
+    /**
+     * What marks a listing as recently launched: merchant launch / event date, or when it first
+     * appeared on the map. Null for long-established places.
+     */
+    fun launchLine(item: ListingItem, nowMs: Long): String? {
+        item.launchAtEpochMs?.let { at ->
+            return if (at > nowMs) "Launches ${date(at, nowMs)}" else "Launched ${date(at, nowMs)}"
+        }
+        if (!isNew(item, nowMs) || item.firstListedAtEpochMs <= 0) return null
+        return "New · added ${date(item.firstListedAtEpochMs, nowMs)}"
+    }
 }

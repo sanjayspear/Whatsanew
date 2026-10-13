@@ -84,8 +84,8 @@ fun CategoryPicker(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            choices.forEach { choice -> Chip(choice.label, "category-${choice.id}") { onChoice(choice) } }
-            Chip("Other", "category-other", selected = otherOpen) { otherOpen = !otherOpen }
+            choices.forEach { choice -> PulseChip(choice.label, "category-${choice.id}") { onChoice(choice) } }
+            PulseChip("Other", "category-other", selected = otherOpen) { otherOpen = !otherOpen }
         }
         if (otherOpen) {
             PulseTextField(
@@ -99,19 +99,4 @@ fun CategoryPicker(
             )
         }
     }
-}
-
-@Composable
-private fun Chip(label: String, tag: String, selected: Boolean = false, onClick: () -> Unit) {
-    val c = Pulse.colors
-    BasicText(
-        label,
-        style = PulseType.label.copy(color = if (selected) c.accent else c.textPrimary),
-        modifier = Modifier
-            .height(40.dp)
-            .neumorphic(RoundedCornerShape(50), pressed = selected)
-            .clickable(role = Role.Button, onClick = onClick)
-            .testTag(tag)
-            .padding(horizontal = 18.dp, vertical = 11.dp),
-    )
 }

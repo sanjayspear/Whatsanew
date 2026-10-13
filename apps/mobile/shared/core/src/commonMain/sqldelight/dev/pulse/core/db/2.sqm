@@ -1,0 +1,4 @@
+-- Migration 2 -> 3 (session 3, 2026-10-14): names searchable without decoding JSON, so a search is
+-- no longer limited to an arbitrary 5,000 rows of a dense area. Old rows get search_text filled by
+-- SqlListingCache.backfillSearchText() at start-up.
+ALTER TABLE listing_cache ADD COLUMN search_text TEXT NOT NULL DEFAULT '';

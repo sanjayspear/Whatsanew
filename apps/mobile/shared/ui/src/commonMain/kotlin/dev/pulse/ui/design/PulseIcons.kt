@@ -54,4 +54,46 @@ object PulseIcons {
         moveTo(9f, 5f); lineTo(9f, 9f); moveTo(15f, 10f); lineTo(15f, 14f); moveTo(7f, 15f); lineTo(7f, 19f)
     }
     val Back = icon("back") { moveTo(15f, 5f); lineTo(8f, 12f); lineTo(15f, 19f) }
+    val Menu = icon("menu") { moveTo(4f, 7f); lineTo(20f, 7f); moveTo(4f, 12f); lineTo(20f, 12f); moveTo(4f, 17f); lineTo(20f, 17f) }
+    val Close = icon("close") { moveTo(6f, 6f); lineTo(18f, 18f); moveTo(18f, 6f); lineTo(6f, 18f) }
+    val Search = icon("search") {
+        moveTo(17f, 10.5f); curveTo(17f, 14.1f, 14.1f, 17f, 10.5f, 17f); curveTo(6.9f, 17f, 4f, 14.1f, 4f, 10.5f)
+        curveTo(4f, 6.9f, 6.9f, 4f, 10.5f, 4f); curveTo(14.1f, 4f, 17f, 6.9f, 17f, 10.5f); close(); moveTo(15.5f, 15.5f); lineTo(20f, 20f)
+    }
+    val User = icon("user") {
+        moveTo(15.5f, 8f); curveTo(15.5f, 9.9f, 13.9f, 11.5f, 12f, 11.5f); curveTo(10.1f, 11.5f, 8.5f, 9.9f, 8.5f, 8f)
+        curveTo(8.5f, 6.1f, 10.1f, 4.5f, 12f, 4.5f); curveTo(13.9f, 4.5f, 15.5f, 6.1f, 15.5f, 8f); close()
+        moveTo(5f, 20f); curveTo(5f, 16.5f, 8f, 14f, 12f, 14f); curveTo(16f, 14f, 19f, 16.5f, 19f, 20f)
+    }
+    val Clock = icon("clock") {
+        moveTo(20f, 12f); curveTo(20f, 16.4f, 16.4f, 20f, 12f, 20f); curveTo(7.6f, 20f, 4f, 16.4f, 4f, 12f)
+        curveTo(4f, 7.6f, 7.6f, 4f, 12f, 4f); curveTo(16.4f, 4f, 20f, 7.6f, 20f, 12f); close(); moveTo(12f, 8f); lineTo(12f, 12f); lineTo(15f, 14f)
+    }
+    val Info = icon("info") {
+        moveTo(20f, 12f); curveTo(20f, 16.4f, 16.4f, 20f, 12f, 20f); curveTo(7.6f, 20f, 4f, 16.4f, 4f, 12f)
+        curveTo(4f, 7.6f, 7.6f, 4f, 12f, 4f); curveTo(16.4f, 4f, 20f, 7.6f, 20f, 12f); close(); moveTo(12f, 11f); lineTo(12f, 16f); moveTo(12f, 8f); lineTo(12f, 8.1f)
+    }
+    val Help = icon("help") {
+        moveTo(20f, 12f); curveTo(20f, 16.4f, 16.4f, 20f, 12f, 20f); curveTo(7.6f, 20f, 4f, 16.4f, 4f, 12f)
+        curveTo(4f, 7.6f, 7.6f, 4f, 12f, 4f); curveTo(16.4f, 4f, 20f, 7.6f, 20f, 12f); close()
+        moveTo(9.5f, 9.5f); curveTo(9.5f, 6.5f, 14.5f, 6.5f, 14.5f, 9.5f); curveTo(14.5f, 11.5f, 12f, 11.5f, 12f, 13.5f); moveTo(12f, 16.5f); lineTo(12f, 16.6f)
+    }
+    val Shield = icon("shield") { moveTo(12f, 3.5f); lineTo(19f, 6f); lineTo(19f, 11.5f); curveTo(19f, 15.5f, 16f, 18.8f, 12f, 20.5f); curveTo(8f, 18.8f, 5f, 15.5f, 5f, 11.5f); lineTo(5f, 6f); close() }
+    val Logout = icon("logout") { moveTo(10f, 4f); lineTo(5f, 4f); lineTo(5f, 20f); lineTo(10f, 20f); moveTo(14f, 8f); lineTo(18f, 12f); lineTo(14f, 16f); moveTo(18f, 12f); lineTo(9f, 12f) }
+    val Megaphone = icon("megaphone") {
+        moveTo(4f, 10f); lineTo(4f, 14f); lineTo(8f, 14f); lineTo(16f, 18.5f); lineTo(16f, 5.5f); lineTo(8f, 10f); close()
+        moveTo(8f, 14f); lineTo(9.5f, 19f); moveTo(19f, 9.5f); curveTo(20.3f, 10.5f, 20.3f, 13.5f, 19f, 14.5f)
+    }
+    val Rocket = icon("rocket") {
+        moveTo(12f, 3f); curveTo(15.5f, 5.5f, 16.5f, 9.5f, 15f, 15f); lineTo(9f, 15f); curveTo(7.5f, 9.5f, 8.5f, 5.5f, 12f, 3f); close()
+        moveTo(9f, 12f); lineTo(6f, 15f); lineTo(6f, 18f); lineTo(9f, 16f); moveTo(15f, 12f); lineTo(18f, 15f); lineTo(18f, 18f); lineTo(15f, 16f)
+        moveTo(12f, 17f); lineTo(12f, 20.5f)
+    }
+    val Pin = icon("pin") {
+        moveTo(12f, 21f); curveTo(8f, 16f, 6f, 13f, 6f, 9.5f); curveTo(6f, 6.2f, 8.7f, 3.5f, 12f, 3.5f); curveTo(15.3f, 3.5f, 18f, 6.2f, 18f, 9.5f)
+        curveTo(18f, 13f, 16f, 16f, 12f, 21f); close(); moveTo(13.5f, 9.5f); curveTo(13.5f, 10.3f, 12.8f, 11f, 12f, 11f); curveTo(11.2f, 11f, 10.5f, 10.3f, 10.5f, 9.5f)
+        curveTo(10.5f, 8.7f, 11.2f, 8f, 12f, 8f); curveTo(12.8f, 8f, 13.5f, 8.7f, 13.5f, 9.5f); close()
+    }
+    val External = icon("external") { moveTo(13f, 5f); lineTo(19f, 5f); lineTo(19f, 11f); moveTo(19f, 5f); lineTo(11f, 13f); moveTo(17f, 14f); lineTo(17f, 19f); lineTo(5f, 19f); lineTo(5f, 7f); lineTo(10f, 7f) }
+    val Trash = icon("trash") { moveTo(5f, 7f); lineTo(19f, 7f); moveTo(10f, 4f); lineTo(14f, 4f); moveTo(7f, 7f); lineTo(8f, 20f); lineTo(16f, 20f); lineTo(17f, 7f) }
 }

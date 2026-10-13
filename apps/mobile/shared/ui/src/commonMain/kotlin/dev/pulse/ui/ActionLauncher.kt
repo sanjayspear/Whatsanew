@@ -11,6 +11,9 @@ fun interface ActionLauncher {
 
     /** Native share sheet (Android chooser / iOS UIActivityViewController). No-op where unsupported. */
     fun share(subject: String, text: String) {}
+
+    /** Whether an app is installed (Android; needs a <queries> entry). Only used for wording. */
+    fun isInstalled(androidPackage: String): Boolean = false
 }
 
 expect fun platformActionLauncher(context: PlatformContext): ActionLauncher
@@ -26,9 +29,8 @@ object ActionUris {
         }
         ActionKind.PLAY_VIDEO -> action.args["videoId"]?.let { "https://www.youtube.com/watch?v=$it" }
         ActionKind.OPEN_URL -> action.args["url"]
-        ActionKind.BOOK -> action.args["listingId"]?.let { "pulse://book/$it" }
-        // Save and Share are handled in-app by PulseGraph.dispatch (shelf + share sheet), not as URIs.
-        ActionKind.SAVE, ActionKind.SHARE -> null
+        // Save, Share and Book are handled in-app by PulseGraph.dispatch (shelf, share sheet, booking page).
+        ActionKind.BOOK, ActionKind.SAVE, ActionKind.SHARE -> null
         ActionKind.REFINE -> null
     }
 }
@@ -39,5 +41,5 @@ fun shareText(item: ResolvedItem): Pair<String, String> {
     val name = l.title("en")
     val map = "https://www.openstreetmap.org/?mlat=${l.lat}&mlon=${l.lng}#map=18/${l.lat}/${l.lng}"
     val body = listOfNotNull(name, l.address, l.phone, map).joinToString("\n")
-    return name to "$body\n\nShared from Pulse"
+    return name to "$body\n\nShared from Search Around"
 }

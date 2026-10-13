@@ -11,6 +11,11 @@ actual fun platformActionLauncher(context: PlatformContext): ActionLauncher = ob
         runCatching { context.android.startActivity(Intent(action, Uri.parse(uri)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
+    override fun isInstalled(androidPackage: String): Boolean = runCatching {
+        context.android.packageManager.getPackageInfo(androidPackage, 0)
+        true
+    }.getOrDefault(false)
+
     override fun share(subject: String, text: String) {
         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
             .putExtra(Intent.EXTRA_SUBJECT, subject)

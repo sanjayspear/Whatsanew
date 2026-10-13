@@ -1,5 +1,6 @@
 package dev.pulse.core.data
 
+import dev.pulse.core.data.booking.BookingDestinations
 import kotlinx.serialization.Serializable
 
 /** Client-side listing (offline cache row + API DTO). Mirrors catalog-service's Listing schema. */
@@ -26,9 +27,18 @@ data class ListingItem(
     val closesAtMinute: Int? = null,
     val rating: Float? = null,
     val tagline: Map<String, String> = emptyMap(),
+    /** A merchant's own booking / ticket link (https only, validated when posted). */
+    val bookingUrl: String? = null,
+    /** Key of a merchant-uploaded image in [dev.pulse.core.prefs.KeyValueStore], if any. */
+    val imageKey: String? = null,
+    /** When a merchant offering launches or an event starts (shown on "Recently launched" cards). */
+    val launchAtEpochMs: Long? = null,
 ) {
     fun title(languageTag: String): String = titles.resolve(languageTag)
     fun taglineFor(languageTag: String): String? = tagline.takeIf { it.isNotEmpty() }?.resolve(languageTag)
+
+    /** Lower-case names (all languages) and tagline: what name searches look at. */
+    fun searchText(): String = (titles.values + tagline.values).joinToString(" ").lowercase()
 
     /** For `$item.<field>` references in DSL action args. */
     fun field(name: String): String? = when (name) {
@@ -39,6 +49,8 @@ data class ListingItem(
         "videoId" -> videoId
         "website" -> website
         "title" -> titles.resolve("en")
+        // Non-null only when there is somewhere real to book (see BookingDestinations).
+        "bookable" -> id.takeIf { BookingDestinations.isBookable(this) }
         else -> null
     }
 }

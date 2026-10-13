@@ -41,4 +41,36 @@ class SchemaMigrationTest {
         SqlListingCache(db).upsert(listOf(item), 0)
         assertEquals(1, SqlListingCache(db).near(dev.pulse.core.data.GeoCoordinate(item.lat, item.lng), 500).size)
     }
+
+    @Test
+    fun `version 2 rows get searchable names after the upgrade`() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        v1Schema.forEach { driver.execute(null, it, 0) }
+        PulseDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 2)
+        // A row written by version 2 of the app: no search_text column yet.
+        val item = SampleCatalog.listings(0).first()
+        val json = dev.pulse.dsl.PulseJson.encodeToString(dev.pulse.core.data.ListingItem.serializer(), item).replace("'", "''")
+        driver.execute(null, "INSERT INTO listing_cache VALUES ('${item.id}', 'IN', '${item.category}', ${item.lat}, ${item.lng}, '$json', 0)", 0)
+
+        PulseDatabase.Schema.migrate(driver, oldVersion = 2, newVersion = PulseDatabase.Schema.version)
+        val cache = SqlListingCache(PulseDatabase(driver))
+        val here = dev.pulse.core.data.GeoCoordinate(item.lat, item.lng)
+        val byName: (String, String) -> Boolean = { _, text -> dev.pulse.core.data.NameMatch.score(text, item.title("en")) > 0 }
+        assertTrue(cache.nearMatching(here, 500, 10, byName).isEmpty(), "not searchable until backfilled")
+        cache.backfillSearchText()
+        assertEquals(listOf(item.id), cache.nearMatching(here, 500, 10, byName).map { it.id })
+    }
+
+    @Test
+    fun `dense areas are not truncated`() {
+        val db = PulseDatabase(JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { PulseDatabase.Schema.create(it) })
+        val cache = SqlListingCache(db)
+        val base = SampleCatalog.listings(0).first()
+        // 6,000 cafés plus one office, all within a few hundred metres: the office must still be found by name.
+        val many = (0 until 6_000).map { i -> base.copy(id = "c$i", titles = mapOf("en" to "Cafe $i"), category = "food.cafe", lat = base.lat + (i % 80) * 1e-5, lng = base.lng + (i / 80) * 1e-5) }
+        val office = base.copy(id = "ms", titles = mapOf("en" to "Microsoft"), category = "business.office")
+        cache.upsert(many + office, 0)
+        val found = cache.nearMatching(dev.pulse.core.data.GeoCoordinate(base.lat, base.lng), 6_000, 50) { _, t -> dev.pulse.core.data.NameMatch.score(t, "microsoft") > 0 }
+        assertEquals(listOf("ms"), found.map { it.id })
+    }
 }

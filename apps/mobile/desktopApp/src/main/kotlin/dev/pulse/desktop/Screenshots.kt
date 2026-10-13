@@ -28,7 +28,11 @@ fun main(args: Array<String>) {
 
     fun shoot(name: String, startScreen: Screen, heightOverrideDp: Int = heightDp, firstLaunch: Boolean = false, setup: suspend PulseGraph.() -> Unit = {}) {
         val graph = PulseGraph.create(PlatformContext(), launcher = { }, useSampleData = true)
-        if (!firstLaunch) graph.roles.setRole(UserRole.REGULAR) // past the one-time role question
+        if (!firstLaunch) {
+            // Past the one-time account setup.
+            graph.roles.setRole(UserRole.REGULAR)
+            graph.profiles.save(dev.pulse.core.prefs.UserProfile("Sanjay"))
+        }
         runBlocking { graph.setup() }
         ImageComposeScene((widthDp * density).toInt(), (heightOverrideDp * density).toInt(), Density(density)) {
             PulseApp(graph, startScreen)

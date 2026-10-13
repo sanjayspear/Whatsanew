@@ -13,6 +13,7 @@ interface SavedShelf {
     /** Saves or removes [item]; returns true if it is now saved. */
     fun toggle(item: ListingItem): Boolean
     fun all(): List<ListingItem>
+    fun clear()
 }
 
 class SqlSavedShelf(private val db: PulseDatabase, private val nowMs: () -> Long) : SavedShelf {
@@ -25,6 +26,11 @@ class SqlSavedShelf(private val db: PulseDatabase, private val nowMs: () -> Long
         else db.pulseQueries.unsaveListing(item.id)
         _ids.value = if (nowSaved) _ids.value + item.id else _ids.value - item.id
         return nowSaved
+    }
+
+    override fun clear() {
+        db.pulseQueries.clearSavedListings()
+        _ids.value = emptySet()
     }
 
     override fun all(): List<ListingItem> = db.pulseQueries.savedListings().executeAsList()
@@ -42,4 +48,8 @@ class InMemorySavedShelf : SavedShelf {
         return nowSaved
     }
     override fun all() = items.values.reversed()
+    override fun clear() {
+        items.clear()
+        _ids.value = emptySet()
+    }
 }

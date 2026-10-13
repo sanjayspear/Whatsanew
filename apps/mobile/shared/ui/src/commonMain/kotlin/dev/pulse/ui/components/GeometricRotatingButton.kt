@@ -80,8 +80,9 @@ fun GeometricRotatingButton(
                 center = c,
             )
         }
-        Column(Modifier.align(Alignment.BottomStart).padding(22.dp)) {
-            BasicText(label, style = PulseType.display)
+        // Card hierarchy: a title-sized label and a body subtitle (not a hero headline).
+        Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
+            BasicText(label, style = PulseType.title)
             BasicText(sublabel, style = PulseType.body, modifier = Modifier.padding(top = 4.dp))
         }
     }

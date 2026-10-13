@@ -26,32 +26,32 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * `onboarding.role_picker`: "Are you a Regular user, or a Merchant?". The same component serves
- * first launch (`mode: onboarding`) and Settings (`mode: settings`, shows the current choice).
+ * `onboarding.role_picker`: "Are you a User, or a Merchant?". The same component serves first-launch
+ * setup (`mode: onboarding`) and Settings (`mode: settings`); both show the current choice.
  */
 object RolePickerComponent : PulseComponent {
     override val key = "onboarding.role_picker"
 
     @Composable
     override fun Render(node: Node, scope: RenderScope, modifier: Modifier) {
-        val settings = node.props["mode"]?.jsonPrimitive?.contentOrNull == "settings"
-        RolePicker(current = if (settings) scope.session.role else null, onSelect = scope.session::setRole, modifier = modifier)
+        val onboarding = node.props["mode"]?.jsonPrimitive?.contentOrNull == "onboarding"
+        RolePicker(current = scope.session.role, onSelect = scope.session::setRole, modifier = modifier, onboarding = onboarding)
     }
 }
 
 @Composable
-fun RolePicker(current: UserRole?, onSelect: (UserRole) -> Unit, modifier: Modifier = Modifier) {
+fun RolePicker(current: UserRole?, onSelect: (UserRole) -> Unit, modifier: Modifier = Modifier, onboarding: Boolean = false) {
     val c = Pulse.colors
     Column(modifier.fillMaxWidth().glass().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        BasicText(if (current == null) "WELCOME TO PULSE" else "YOUR ROLE", style = PulseType.overline.copy(color = c.accent))
-        BasicText("Are you a Regular user, or a Merchant?", style = PulseType.title)
+        BasicText(if (onboarding) "ACCOUNT TYPE" else "YOUR ROLE", style = PulseType.overline.copy(color = c.accent))
+        BasicText("Are you a User, or a Merchant?", style = PulseType.title)
         BasicText(
-            "Regular users discover what's around them. Merchants list their places and events. You can change this later in Settings.",
+            "Users search for places, services and events. Merchants also publish new shops, events and launches. You can change this later in Settings.",
             style = PulseType.body,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            RoleOption("Regular user", "Discover nearby", current == UserRole.REGULAR, "role-regular", Modifier.weight(1f)) { onSelect(UserRole.REGULAR) }
-            RoleOption("Merchant", "List my business", current == UserRole.MERCHANT, "role-merchant", Modifier.weight(1f)) { onSelect(UserRole.MERCHANT) }
+            RoleOption("User", "Search around", current == UserRole.REGULAR, "role-regular", Modifier.weight(1f)) { onSelect(UserRole.REGULAR) }
+            RoleOption("Merchant", "Publish offerings", current == UserRole.MERCHANT, "role-merchant", Modifier.weight(1f)) { onSelect(UserRole.MERCHANT) }
         }
     }
 }

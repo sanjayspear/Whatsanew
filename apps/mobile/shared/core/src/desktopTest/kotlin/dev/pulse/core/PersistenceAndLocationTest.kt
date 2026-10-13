@@ -106,15 +106,15 @@ class PersistenceAndLocationTest {
     }
 
     @Test
-    fun `sparse areas widen the radius instead of showing nothing`() {
+    fun `sparse areas are never silently widened (the user is asked instead)`() {
         val now = 1_770_791_400_000L
         val seed = SampleCatalog.listings(now)
-        // Middle of nowhere relative to the seed: nothing within 2 km, a few within 10 km.
+        // Middle of nowhere relative to the seed: nothing within 1 km, some within 10 km.
         val tracker = FixedLocationTracker(GeoCoordinate(12.9800, 77.6500))
         val resolver = ListingResolver(ListingSource { seed }, Gazetteer.Bangalore, tracker.asProvider(), LocalRanker(InMemorySignalLog()), { now })
-        val r = resolver.resolveWidening(Binding(ListingQuery(listOf("food.cafe"), near = GeoFilter(GeoAnchor.Here, 1_000))))
-        assertTrue(r.widened, "radius grew from ${r.requestedRadiusMeters} to ${r.radiusMeters}")
-        assertTrue(r.items.size >= 3 || r.radiusMeters == 10_000)
-        assertTrue(r.items.isNotEmpty())
+        val near = resolver.resolveWithin(Binding(ListingQuery(listOf("food.cafe"), near = GeoFilter(GeoAnchor.Here, 1_000))))
+        assertTrue(near.items.isEmpty() && !near.widened && near.radiusMeters == 1_000)
+        val wider = resolver.resolveWithin(Binding(ListingQuery(listOf("food.cafe"), near = GeoFilter(GeoAnchor.Here, 10_000))))
+        assertTrue(wider.items.isNotEmpty(), "the offered wider search finds places")
     }
 }

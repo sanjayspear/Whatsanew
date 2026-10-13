@@ -41,7 +41,7 @@ data class GeoFilter(
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
 ) {
     companion object {
-        const val DEFAULT_RADIUS_METERS = 5_000
+        const val DEFAULT_RADIUS_METERS = 6_000
         const val MIN_RADIUS_METERS = 100
         const val MAX_RADIUS_METERS = 50_000
     }

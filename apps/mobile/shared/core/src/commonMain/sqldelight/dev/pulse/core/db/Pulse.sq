@@ -8,7 +8,9 @@ CREATE TABLE listing_cache (
     lat REAL NOT NULL,
     lng REAL NOT NULL,
     json TEXT NOT NULL,
-    fetched_at INTEGER NOT NULL
+    fetched_at INTEGER NOT NULL,
+    -- Lower-case names + tagline, so searches filter by name/category before loading JSON (migration 2).
+    search_text TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX listing_cache_region ON listing_cache(region_code, category);
@@ -36,8 +38,20 @@ CREATE TABLE kv (
 );
 
 upsertListing:
-INSERT OR REPLACE INTO listing_cache(id, region_code, category, lat, lng, json, fetched_at)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO listing_cache(id, region_code, category, lat, lng, json, fetched_at, search_text)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+candidatesInBox:
+SELECT id, category, lat, lng, search_text FROM listing_cache WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?;
+
+listingsByIds:
+SELECT json FROM listing_cache WHERE id IN ?;
+
+untitledListings:
+SELECT id, json FROM listing_cache WHERE search_text = '' LIMIT ?;
+
+setSearchText:
+UPDATE listing_cache SET search_text = ? WHERE id = ?;
 
 listingsInRegion:
 SELECT json FROM listing_cache WHERE region_code = ?;
@@ -86,3 +100,15 @@ SELECT json FROM saved_listing ORDER BY saved_at DESC;
 
 savedIds:
 SELECT listing_id FROM saved_listing;
+
+deleteValue:
+DELETE FROM kv WHERE key = ?;
+
+deleteValuesWithPrefix:
+DELETE FROM kv WHERE key >= ? AND key < ?;
+
+clearSavedListings:
+DELETE FROM saved_listing;
+
+deleteListing:
+DELETE FROM listing_cache WHERE id = ?;

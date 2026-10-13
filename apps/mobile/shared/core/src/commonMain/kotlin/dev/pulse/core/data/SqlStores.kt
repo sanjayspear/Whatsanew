@@ -23,6 +23,48 @@ class SqlListingCache(private val db: PulseDatabase, private val maxRows: Long =
         )
     }
 
+    /** Filters on light columns first, then loads JSON only for the nearest [max] matches: no row cap. */
+    override fun nearMatching(center: GeoCoordinate, radiusMeters: Int, max: Int, keep: (String, String) -> Boolean): List<ListingItem> {
+        val (dLat, dLng) = box(center, radiusMeters)
+        val ids = db.pulseQueries.candidatesInBox(center.lat - dLat, center.lat + dLat, center.lng - dLng, center.lng + dLng).executeAsList()
+            .asSequence()
+            .filter { keep(it.category, it.search_text) }
+            .map { it.id to haversineMeters(center.lat, center.lng, it.lat, it.lng) }
+            .filter { (_, d) -> d <= radiusMeters }
+            .sortedBy { it.second }
+            .take(max)
+            .map { it.first }
+            .toList()
+        return ids.chunked(500).flatMap { decode(db.pulseQueries.listingsByIds(it).executeAsList()) }
+    }
+
+    /** Search texts around a point (for "is this a real name?"), without loading JSON. */
+    fun searchTextsNear(center: GeoCoordinate, radiusMeters: Int): List<String> {
+        val (dLat, dLng) = box(center, radiusMeters)
+        return db.pulseQueries.candidatesInBox(center.lat - dLat, center.lat + dLat, center.lng - dLng, center.lng + dLng)
+            .executeAsList().map { it.search_text }
+    }
+
+    /** Fills search_text for rows written before migration 2 (runs at start-up, in batches). */
+    fun backfillSearchText() {
+        while (true) {
+            val rows = db.pulseQueries.untitledListings(1_000).executeAsList()
+            if (rows.isEmpty()) return
+            db.transaction {
+                rows.forEach { row ->
+                    val text = runCatching { PulseJson.decodeFromString(ListingItem.serializer(), row.json).searchText() }.getOrNull()
+                    db.pulseQueries.setSearchText(text?.ifEmpty { " " } ?: " ", row.id)
+                }
+            }
+        }
+    }
+
+    private fun box(center: GeoCoordinate, radiusMeters: Int): Pair<Double, Double> {
+        val dLat = radiusMeters / 111_320.0
+        val dLng = radiusMeters / (111_320.0 * kotlin.math.cos(center.lat * kotlin.math.PI / 180).coerceAtLeast(0.01))
+        return dLat to dLng
+    }
+
     fun countInRegion(regionCode: String): Long = db.pulseQueries.countInRegion(regionCode).executeAsOne()
 
     private fun decode(rows: List<String>) =
@@ -36,7 +78,7 @@ class SqlListingCache(private val db: PulseDatabase, private val maxRows: Long =
         items.forEach { item ->
             db.pulseQueries.upsertListing(
                 item.id, item.regionCode, item.category, item.lat, item.lng,
-                PulseJson.encodeToString(ListingItem.serializer(), item), nowMs,
+                PulseJson.encodeToString(ListingItem.serializer(), item), nowMs, item.searchText(),
             )
         }
     }

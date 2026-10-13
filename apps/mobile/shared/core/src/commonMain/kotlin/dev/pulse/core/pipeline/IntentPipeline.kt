@@ -1,6 +1,9 @@
 package dev.pulse.core.pipeline
 
 import dev.pulse.core.ai.AiEngine
+import dev.pulse.core.ai.Clarification
+import dev.pulse.core.ai.Clarifier
+import dev.pulse.core.data.SearchDefaults
 import dev.pulse.core.ai.IntentContext
 import dev.pulse.core.ai.IntentInput
 import dev.pulse.core.prefs.ProfileStore
@@ -10,6 +13,12 @@ import dev.pulse.core.signals.SignalLog
 import dev.pulse.dsl.ActionSpec
 import dev.pulse.dsl.DslValidator
 import dev.pulse.dsl.FrameSource
+import dev.pulse.dsl.GeoAnchor
+import dev.pulse.dsl.GeoFilter
+import dev.pulse.dsl.Node
+import dev.pulse.dsl.Roles
+import dev.pulse.dsl.Task
+import dev.pulse.dsl.UiPatch
 import dev.pulse.dsl.IntentFrame
 import dev.pulse.dsl.Persistence
 import dev.pulse.dsl.ReduceResult
@@ -21,6 +30,9 @@ import dev.pulse.dsl.UiOp
 import dev.pulse.dsl.ValidationIssue
 import dev.pulse.dsl.hasErrors
 import kotlin.time.TimeSource
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -63,6 +75,11 @@ class IntentPipeline(
 
     suspend fun submit(input: IntentInput) {
         val mark = TimeSource.Monotonic.markNow()
+        // Ambiguous request: ask instead of guessing (the answer comes back as a normal, clearer request).
+        if (input.visionTags.isEmpty()) Clarifier.question(input.text)?.let { q ->
+            showClarification(q, input.text, mark.elapsedNow().inWholeMilliseconds)
+            return
+        }
         val current = _state.value.surface
         val context = IntentContext(
             visibleRoles = current?.root?.children?.mapNotNull { it.role }.orEmpty(),
@@ -74,8 +91,13 @@ class IntentPipeline(
     }
 
     /** Applies one frame. Public for tests and for server-pushed frames. */
-    fun apply(frame: IntentFrame, utterance: String, latencyMs: Long) {
+    fun apply(input: IntentFrame, utterance: String, latencyMs: Long) {
         val before = _state.value
+        // Searches that don't say where mean "around me, within my default radius" (Settings, 6 km by default).
+        val q = input.query
+        val frame = if (input.task == Task.DISCOVER && q != null && q.near == null) {
+            input.copy(query = q.copy(near = GeoFilter(GeoAnchor.Here, SearchDefaults.radiusMeters)))
+        } else input
         val result = composer.compose(frame, before.surface, profile.layout(), profile.theme())
         result.action?.let { _actions.tryEmit(it) }
 
@@ -109,6 +131,19 @@ class IntentPipeline(
         )
     }
 
+    private fun showClarification(q: Clarification, utterance: String, latencyMs: Long) {
+        val options = JsonArray(q.options.map { o -> JsonObject(mapOf("label" to JsonPrimitive(o.label), "utterance" to JsonPrimitive(o.utterance))) })
+        val node = Node(
+            "clarify", CLARIFY_COMPONENT, role = Roles.PICKER,
+            props = JsonObject(mapOf("question" to JsonPrimitive(q.question), "options" to options)),
+        )
+        val surface = Surface("clarify-${nowMs()}", Node("root", "layout.stack", role = Roles.ROOT, children = listOf(node)), theme = profile.theme())
+        val patch = UiPatch(listOf(UiOp.ReplaceSurface(surface)))
+        val issues = validator.validate(patch)
+        if (issues.hasErrors()) return
+        _state.value = SurfaceState(surface, profile.theme(), utterance, FrameSource.RULES, latencyMs, issues)
+    }
+
     fun record(signal: Signal) {
         signals.append(signal)
         ranker.invalidate()
@@ -116,5 +151,10 @@ class IntentPipeline(
 
     fun reset() {
         _state.value = SurfaceState(theme = profile.theme())
+    }
+
+    companion object {
+        /** The question card shown for ambiguous requests (registered by the UI). */
+        const val CLARIFY_COMPONENT = "intent.clarify"
     }
 }

@@ -12,7 +12,7 @@ import dev.pulse.ui.PulseGraph
 /** Phone-sized dev window: the whole shared app with the rules-only AI ladder. */
 fun main() = application {
     val graph = PulseGraph.create(PlatformContext(), useSampleData = true)
-    Window(onCloseRequest = ::exitApplication, title = "Pulse (desktop harness)", state = rememberWindowState(size = DpSize(412.dp, 900.dp))) {
+    Window(onCloseRequest = ::exitApplication, title = "Search Around (desktop harness)", state = rememberWindowState(size = DpSize(412.dp, 900.dp))) {
         PulseApp(graph)
     }
 }

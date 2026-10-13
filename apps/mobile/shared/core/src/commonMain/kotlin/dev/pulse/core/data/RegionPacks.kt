@@ -17,6 +17,8 @@ class RegionPacks(
     private val cache: SqlListingCache,
     private val readPack: suspend (regionCode: String) -> ByteArray?,
     private val nowMs: () -> Long,
+    /** Remembers which pack version is loaded, so an app update with a richer pack reloads it once. */
+    private val kv: dev.pulse.core.prefs.KeyValueStore? = null,
 ) {
     data class Region(val code: String, val south: Double, val west: Double, val north: Double, val east: Double) {
         fun contains(p: GeoCoordinate) = p.lat in south..north && p.lng in west..east
@@ -33,7 +35,9 @@ class RegionPacks(
     suspend fun ensureLoaded() {
         for (region in AVAILABLE) {
             if (region.code in _loaded.value) continue
-            if (cache.countInRegion(region.code) > MIN_EXPECTED) {
+            val versionKey = "pack.${region.code}.version"
+            val current = kv?.get(versionKey)?.toIntOrNull() ?: if (kv == null) PACK_VERSION else 1
+            if (current >= PACK_VERSION && cache.countInRegion(region.code) > MIN_EXPECTED) {
                 _loaded.value += region.code
                 continue
             }
@@ -42,6 +46,7 @@ class RegionPacks(
                 val bytes = readPack(region.code) ?: continue
                 val items = OverpassClient.parse(bytes.decodeToString()).map { it.copy(regionCode = region.code) }
                 cache.upsert(items, nowMs())
+                kv?.put(versionKey, PACK_VERSION.toString())
                 _loaded.value += region.code
             } finally {
                 _loading.value = false
@@ -52,5 +57,8 @@ class RegionPacks(
     companion object {
         val AVAILABLE = listOf(Region("IN-KA-BLR", 12.75, 77.35, 13.20, 77.85))
         private const val MIN_EXPECTED = 1_000L
+
+        /** Bump when the bundled pack changes. 2 = worship, beauty, juice, IT parks, schools, services; 3 = named offices (session 3). */
+        const val PACK_VERSION = 3
     }
 }

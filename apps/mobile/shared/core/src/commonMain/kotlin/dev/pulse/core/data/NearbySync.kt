@@ -1,6 +1,7 @@
 package dev.pulse.core.data
 
 import dev.pulse.core.data.osm.OverpassClient
+import dev.pulse.core.data.osm.PhotonClient
 import dev.pulse.core.data.osm.PlaceGeocoder
 import dev.pulse.dsl.Binding
 import dev.pulse.dsl.GeoAnchor
@@ -32,6 +33,8 @@ class NearbySync(
     private val freshForMs: Long = 6 * 60 * 60_000L,
     /** True where an offline region pack already has the data; no live query is needed there. */
     private val coveredOffline: (GeoCoordinate) -> Boolean = { false },
+    /** Name search ("Microsoft", "Wells Fargo"); runs everywhere, since no pack has every business. */
+    private val names: PhotonClient? = null,
 ) {
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version.asStateFlow()
@@ -68,6 +71,7 @@ class NearbySync(
     private suspend fun ensureLocked(binding: Binding) = lock.withLock {
         val query = binding.query
         val center = anchor(query.near?.anchor) ?: return@withLock
+        query.text?.takeIf { names != null && it.length >= 2 }?.let { text -> searchByName(text, center) }
         if (coveredOffline(center)) return@withLock // instant and offline from the region pack
         val radius = (query.near?.radiusMeters ?: GeoFilter.DEFAULT_RADIUS_METERS).coerceAtMost(MAX_FETCH_RADIUS)
         val key = "${(center.lat * 100).roundToInt()},${(center.lng * 100).roundToInt()}|$radius|${query.categories.sorted()}"
@@ -85,6 +89,23 @@ class NearbySync(
             _lastError.value = "Couldn't reach OpenStreetMap. Showing saved places."
             _lastErrorDetail.value = generateSequence(e) { it.cause }.take(3)
                 .joinToString(" ← ") { "${it::class.simpleName}: ${it.message?.take(80)}" }
+        }
+    }
+
+    /** One request per (name, ~10 km area) per [freshForMs]; results join the offline cache. */
+    private suspend fun searchByName(text: String, center: GeoCoordinate) {
+        val key = "name|${text.lowercase()}|${(center.lat * 10).roundToInt()},${(center.lng * 10).roundToInt()}"
+        val last = fetchedAt[key]
+        if (last != null && nowMs() - last < freshForMs) return
+        try {
+            val found = names!!.search(text, center)
+            store(found)
+            fetchedAt[key] = nowMs()
+            if (found.isNotEmpty()) _version.value++
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            _lastErrorDetail.value = "name search: ${e::class.simpleName}: ${e.message?.take(80)}"
         }
     }
 

@@ -1,6 +1,7 @@
 package dev.pulse.core.ai
 
 import dev.pulse.core.data.Gazetteer
+import dev.pulse.core.data.SearchDefaults
 import dev.pulse.dsl.ActionKind
 import dev.pulse.dsl.ActionSpec
 import dev.pulse.dsl.Freshness
@@ -105,8 +106,10 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
     private fun extractQuery(t: String): Pair<ListingQuery, Float> {
         // Strip the place name first, so "Cubbon Park" doesn't also read as the "park" category.
         val placeMatch = gazetteer.matchIn(t)
-        val forCategories = placeMatch?.let { (alias, _) -> " $t ".replace(" $alias ", " ").trim() } ?: t
+        val forCategories = correctSpelling(placeMatch?.let { (alias, _) -> " $t ".replace(" $alias ", " ").trim() } ?: t)
         val hits = Lexicon.categories.filter { forCategories.hasPhrase(it.first) }
+            // "IT park" is not also a "park"; "jain temple" is not also a generic "temple".
+            .let { all -> all.filterNot { h -> all.any { o -> o.first != h.first && o.first.hasPhrase(h.first) } } }
         val categories = hits.flatMap { it.second.categories }.distinct()
             // Drop a parent when a child is present ("food.restaurant" + "food.restaurant.south_indian").
             .let { cats -> cats.filterNot { c -> cats.any { it != c && it.startsWith("$c.") } } }
@@ -116,13 +119,15 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
         // Area the offline pack doesn't know ("near Mysuru Palace"): keep the name; the app geocodes it.
         val unknownPlace = if (place == null) UNKNOWN_PLACE.find(forCategories)?.groupValues?.get(1)
             ?.trim()?.takeIf { it.split(' ').none { w -> w in NOT_A_PLACE } && it.length >= 3 }
+            // "in nearby cinemas" names what, not where: a place needs a word the lexicons don't explain.
+            ?.takeIf { it.split(' ').any { w -> w !in KNOWN_TERMS && w !in STOP_WORDS && w !in Lexicon.correctable } }
             ?.split(' ')?.joinToString(" ") { w -> w.replaceFirstChar(Char::uppercase) } else null
         val here = Lexicon.hereWords.any(t::hasPhrase)
         val radius = RADIUS.find(t)?.let { m -> toMeters(m.groupValues[1].toDouble(), m.groupValues[2]) }
         val near = when {
-            place != null -> GeoFilter(GeoAnchor.Place(place.name), radius ?: GeoFilter.DEFAULT_RADIUS_METERS)
-            unknownPlace != null -> GeoFilter(GeoAnchor.Place(unknownPlace), radius ?: GeoFilter.DEFAULT_RADIUS_METERS)
-            here -> GeoFilter(GeoAnchor.Here, radius ?: 2_000)
+            place != null -> GeoFilter(GeoAnchor.Place(place.name), radius ?: SearchDefaults.radiusMeters)
+            unknownPlace != null -> GeoFilter(GeoAnchor.Place(unknownPlace), radius ?: SearchDefaults.radiusMeters)
+            here -> GeoFilter(GeoAnchor.Here, radius ?: SearchDefaults.radiusMeters)
             radius != null -> GeoFilter(GeoAnchor.Here, radius)
             else -> null
         }
@@ -139,7 +144,8 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
             }
         }
         val openNow = if (Lexicon.openNow.any(t::hasPhrase)) true else null
-        val residue = if (categories.isEmpty()) residueText(t, place?.name ?: unknownPlace) else null
+        // With a category, leftover words are usually a name ("microsoft office", "pvr cinema"): they rank, not filter.
+        val residue = residueText(if (categories.isEmpty()) t else forCategories, place?.name ?: unknownPlace)
         val text = dishText ?: residue
 
         var confidence = when {
@@ -164,6 +170,22 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
         ) to confidence.coerceAtMost(0.97f)
     }
 
+    /**
+     * Fixes typos in category words ("temle", "resturant", "chruch") so a slip of the thumb still finds
+     * the right category instead of falling back to a name search. Conservative: only words of 5+
+     * letters, one edit (two for 8+ letters), and never words the lexicons already know.
+     */
+    private fun correctSpelling(t: String): String = t.split(' ').joinToString(" ") { w ->
+        if (w.length < 5 || w in KNOWN_TERMS || w in STOP_WORDS || w in REAL_WORDS || w.any(Char::isDigit)) return@joinToString w
+        val budget = if (w.length >= 8) 2 else 1
+        Lexicon.correctable
+            // Typos rarely change the first letter; this keeps "cakes" from becoming "lakes".
+            .filter { it[0] == w[0] }
+            .map { it to editDistance(w, it) }
+            .filter { (_, d) -> d <= budget }
+            .minByOrNull { (_, d) -> d }?.first ?: w
+    }
+
     /** Content words not already turned into structure ("nearby" is a location, not a search term). */
     private fun residueText(t: String, placeName: String?): String? {
         val placeWords = placeName?.lowercase()?.split(' ')?.toSet().orEmpty()
@@ -186,17 +208,22 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
 
     private companion object {
         val UNKNOWN_PLACE = Regex("""\b(?:in|near|around|at)\s+([a-z][a-z0-9 .'-]{2,40}?)(?=\s+(?:within|this|today|tonight|tomorrow|under|for|with|open|that|which)\b|${'$'})""")
-        val NOT_A_PLACE = setOf("me", "here", "my", "us", "the", "area", "town", "city", "night", "evening", "morning", "home", "all", "this")
+        val NOT_A_PLACE = setOf("me", "here", "my", "us", "the", "area", "town", "city", "night", "evening", "morning", "home", "all", "this", "nearby")
 
         /** Single words that the lexicons already turn into structure. */
         val KNOWN_TERMS: Set<String> = buildSet {
             (Lexicon.categories.map { it.first } + Lexicon.freshNew + Lexicon.freshTrending + Lexicon.cheap +
                 Lexicon.openNow + Lexicon.hereWords + Lexicon.timePresets.map { it.first })
                 .forEach { phrase -> addAll(phrase.split(' ')) }
-            addAll(listOf("nearby", "near", "within", "around", "under", "below", "metres", "meters", "kms", "km"))
+            addAll(listOf("nearby", "near", "within", "around", "under", "below", "metres", "meters", "kms", "km", "nearest", "closest", "upcoming", "latest", "find", "search"))
         }
         val RADIUS = Regex("""(\d+(?:\.\d+)?)\s*(km|kms|kilometers|kilometres|kilometer|kilometre|m|meters|metres|meter|metre|mi|miles|mile)\b""")
         val UNDER_PRICE = Regex("""(?:under|below|less than)\s*(?:₹|rs\.?|inr)?\s*(\d+)""")
+        /** Real words one letter away from a category word ("shows" / "shoes"): never "corrected". */
+        val REAL_WORDS = setOf(
+            "shows", "shops", "store", "stores", "items", "sales", "deals", "offers", "games", "parking", "timing",
+            "timings", "price", "prices", "rates", "plans", "pasta", "parts", "parties", "party", "halls", "hall",
+        )
         val STOP_WORDS = setOf(
             "show", "me", "any", "find", "what", "whats", "where", "is", "are", "there", "the", "and", "for", "some",
             "something", "good", "best", "places", "place", "want", "can", "get", "please", "with", "near", "around",
@@ -207,6 +234,20 @@ class RuleBasedIntentParser(private val gazetteer: Gazetteer) {
             "hmm", "hmmm", "umm", "uhh", "okay", "yes", "yeah", "nope", "hello", "hey", "thanks", "thank", "cool", "wow",
         )
     }
+}
+
+/** Optimal string alignment distance: insertions, deletions, substitutions and adjacent swaps cost 1. */
+internal fun editDistance(a: String, b: String): Int {
+    if (kotlin.math.abs(a.length - b.length) > 2) return 3
+    val d = Array(a.length + 1) { IntArray(b.length + 1) }
+    for (i in 0..a.length) d[i][0] = i
+    for (j in 0..b.length) d[0][j] = j
+    for (i in 1..a.length) for (j in 1..b.length) {
+        val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+        d[i][j] = minOf(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+        if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) d[i][j] = minOf(d[i][j], d[i - 2][j - 2] + 1)
+    }
+    return d[a.length][b.length]
 }
 
 internal fun normalize(raw: String): String = raw.lowercase()
